@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer, useMap, Polyline, CircleMarker, Marker, Popup, useMapEvents } from 'react-leaflet';
+import { MapContainer, useMap, Polyline, CircleMarker, Marker, Popup, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { useStops, useSingleVehicle, usePatternShape, type Stop, type Vehicle } from '../services/api';
 import { useEffect, memo, useCallback, useState, useMemo, useRef } from 'react';
@@ -211,7 +211,7 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
         <SelectedStopMarker stop={selectedStop || null} />
         {vehicle && <BusMarker vehicle={vehicle} isSelected={true} />}
         <PatternShape selectedPatternId={selectedPatternId} />
-        <VehicleTracker vehicle={vehicle} />
+<VehicleTracker vehicle={vehicle} disabled={false} />
       </MapContainer>
 
       {/* All control buttons — OUTSIDE MapContainer for reliable React events */}

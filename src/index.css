@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-carris-dark text-carris-light font-sans antialiased m-0 p-0 overflow-hidden;
+    /* Prevent pull-to-refresh and bounce on iOS */
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+    /* Safe area for iPhone notch */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Prevent text selection on map controls (mobile) */
+  button {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    touch-action: manipulation;
+  }
+}
+
+/* Leaflet map overrides */
+.leaflet-container {
+  background: #1a1a2e !important; /* Dark map base color */
+  font-family: inherit !important;
+  /* Smooth scrolling on mobile */
+  touch-action: pan-x pan-y;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  @apply bg-carris-gray text-carris-light;
+}
+
+/* Smoother scrollbars for the side panel */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 204, 0, 0.3);
+  border-radius: 2px;
+}

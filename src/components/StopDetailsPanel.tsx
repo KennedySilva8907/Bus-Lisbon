@@ -1,0 +1,273 @@
+import { useStopETA, type Stop } from '../services/api';
+import { fromUnixTime } from 'date-fns';
+import { X, Star } from 'lucide-react';
+import { useRef, useEffect } from 'react';
+import { recordDeviation, getLineReliability } from '../services/history';
+
+interface StopDetailsPanelProps {
+  stop: Stop | null;
+  onClose: () => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  selectedVehicleId?: string | null;
+  onVehicleSelect?: (vehicleId: string, patternId?: string) => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
+}
+
+export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleExpand, selectedVehicleId, onVehicleSelect, isFavorite, onToggleFavorite }: StopDetailsPanelProps) {
+  const { etas, isLoading } = useStopETA(stop?.id || null);
+  const panelRef = useRef<HTMLElement>(null);
+  const touchRef = useRef({ startY: 0, isDragging: false });
+
+  if (!stop) return null;
+
+  const nowUnix = Math.floor(Date.now() / 1000);
+
+  // Filter: only show arrivals between 5 min ago and 2 hours from now
+  const sortedEtas = [...etas]
+    .filter(eta => {
+      const time = eta.estimated_arrival_unix || eta.scheduled_arrival_unix;
+      return time > nowUnix - 300 && time < nowUnix + 7200;
+    })
+    .sort((a, b) => {
+      const timeA = a.estimated_arrival_unix || a.scheduled_arrival_unix;
+      const timeB = b.estimated_arrival_unix || b.scheduled_arrival_unix;
+      return timeA - timeB;
+    })
+    .slice(0, 20);
+
+  // Record deviations for history tracking
+  useEffect(() => {
+    if (!stop || sortedEtas.length === 0) return;
+    for (const eta of sortedEtas) {
+      if (eta.estimated_arrival_unix && eta.scheduled_arrival_unix) {
+        recordDeviation(eta.line_id, stop.id, eta.estimated_arrival_unix, eta.scheduled_arrival_unix);
+      }
+    }
+  }, [sortedEtas, stop]);
+
+  // ── Touch swipe handlers ──
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchRef.current.startY = e.touches[0].clientY;
+    touchRef.current.isDragging = true;
+    if (panelRef.current) {
+      panelRef.current.style.transition = 'none';
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchRef.current.isDragging || !panelRef.current) return;
+    const deltaY = e.touches[0].clientY - touchRef.current.startY;
+
+    if (isExpanded && deltaY > 0) {
+      // Dragging down while expanded
+      panelRef.current.style.transform = `translateY(${deltaY}px)`;
+    } else if (!isExpanded && deltaY < 0) {
+      // Dragging up while collapsed
+      const clampedDelta = Math.max(deltaY, -(window.innerHeight * 0.55 - 80));
+      panelRef.current.style.transform = `translateY(calc(100% - 80px + ${clampedDelta}px))`;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!panelRef.current) return;
+    const deltaY = e.changedTouches[0].clientY - touchRef.current.startY;
+    touchRef.current.isDragging = false;
+
+    // Restore CSS transition
+    panelRef.current.style.transition = '';
+    panelRef.current.style.transform = '';
+
+    // Threshold: 50px to toggle
+    if (Math.abs(deltaY) > 50) {
+      if (deltaY > 0 && isExpanded) onToggleExpand();  // swipe down = collapse
+      if (deltaY < 0 && !isExpanded) onToggleExpand(); // swipe up = expand
+    }
+  };
+
+  return (
+    <aside
+      ref={panelRef}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      className={`absolute bottom-0 w-full md:relative md:h-full md:w-96 bg-carris-gray z-[1000] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] flex-shrink-0 flex flex-col rounded-t-3xl md:rounded-l-3xl md:rounded-tr-none transition-transform duration-300 ease-in-out ${
+        isExpanded ? 'h-[55%] translate-y-0' : 'h-[55%] translate-y-[calc(100%-80px)] md:translate-y-0'
+      }`}
+    >
+
+      {/* Drag handle for mobile swiping */}
+      <div className="w-full flex justify-center pt-3 pb-1 md:hidden cursor-grab active:cursor-grabbing" onClick={onToggleExpand}>
+        <div className="w-10 h-1 bg-gray-500 rounded-full"></div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-5 text-white custom-scrollbar flex flex-col">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-5" onClick={() => !isExpanded && onToggleExpand()}>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl font-bold tracking-tight text-carris-light leading-tight truncate">{stop.name}</h2>
+            <div className="text-carris-yellow text-xs font-medium mt-1 flex items-center gap-2">
+              <span className="bg-carris-yellow/10 px-2 py-0.5 rounded text-carris-yellow border border-carris-yellow/20">
+                #{stop.id}
+              </span>
+              {stop.locality && <span className="opacity-70 text-gray-300 truncate">{stop.locality}</span>}
+            </div>
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            {/* Favorite button */}
+            {onToggleFavorite && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+                className={`p-2 rounded-full transition-colors ${isFavorite ? 'bg-carris-yellow/20 text-carris-yellow' : 'bg-white/5 hover:bg-white/10 text-gray-400'}`}
+                aria-label={isFavorite ? 'Remover favorito' : 'Adicionar favorito'}
+              >
+                <Star size={16} fill={isFavorite ? 'currentColor' : 'none'} />
+              </button>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onClose(); }}
+              className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors"
+              aria-label="Close panel"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* ETA List */}
+        <div className="flex-1 space-y-2">
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 border-b border-gray-700 pb-2">
+            Próximas Chegadas
+          </h3>
+
+          {isLoading ? (
+            <div className="flex justify-center items-center py-10 opacity-50">
+               <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-carris-yellow"></div>
+            </div>
+          ) : sortedEtas.length === 0 ? (
+            <div className="text-center py-10 text-gray-400 bg-white/5 rounded-xl border border-white/5">
+              Sem chegadas nos próximos 120 minutos.
+            </div>
+          ) : (
+            sortedEtas.map((eta, i) => {
+              const time = eta.estimated_arrival_unix || eta.scheduled_arrival_unix;
+              const diffMinutes = Math.round((time - nowUnix) / 60);
+              const isPast = diffMinutes < 0;
+              const hasVehicle = !!eta.vehicle_id;
+              const isSelected = selectedVehicleId === eta.vehicle_id;
+
+              // Direction / punctuality indicator
+              let directionLabel = '';
+              let directionColor = 'text-gray-400';
+              if (hasVehicle && eta.estimated_arrival_unix && eta.scheduled_arrival_unix) {
+                const delaySec = eta.estimated_arrival_unix - eta.scheduled_arrival_unix;
+                if (delaySec < -60) {
+                  directionLabel = 'Adiantado';
+                  directionColor = 'text-blue-400';
+                } else if (delaySec > 120) {
+                  const delayMin = Math.round(delaySec / 60);
+                  directionLabel = `Atrasado ${delayMin} min`;
+                  directionColor = 'text-orange-400';
+                } else {
+                  directionLabel = 'Pontual';
+                  directionColor = 'text-green-400';
+                }
+              }
+
+              // Historical reliability
+              const reliability = getLineReliability(eta.line_id, stop.id);
+              let reliabilityLabel = '';
+              if (reliability) {
+                const avgMin = Math.round(reliability.avgDelaySec / 60);
+                if (avgMin > 1) {
+                  reliabilityLabel = `~${avgMin} min atraso`;
+                } else if (avgMin < -1) {
+                  reliabilityLabel = `~${Math.abs(avgMin)} min adiantado`;
+                } else {
+                  reliabilityLabel = 'Geralmente pontual';
+                }
+              }
+
+              // Human-friendly time display
+              let displayTime: string;
+              if (isPast) {
+                displayTime = `Há ${Math.abs(diffMinutes)} min`;
+              } else if (diffMinutes === 0) {
+                displayTime = 'Agora';
+              } else if (diffMinutes < 60) {
+                displayTime = `${diffMinutes} min`;
+              } else {
+                const hours = Math.floor(diffMinutes / 60);
+                const mins = diffMinutes % 60;
+                displayTime = `${hours}h${mins > 0 ? String(mins).padStart(2, '0') : ''}`;
+              }
+
+              return (
+                <div
+                  key={`${eta.vehicle_id || eta.line_id}-${i}`}
+                  onClick={() => {
+                    if (hasVehicle && onVehicleSelect) {
+                      onVehicleSelect(eta.vehicle_id, eta.pattern_id);
+                    }
+                  }}
+                  className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                    isSelected
+                      ? 'bg-carris-yellow/10 border-carris-yellow ring-1 ring-carris-yellow'
+                      : hasVehicle
+                        ? 'bg-[#232323] hover:bg-[#2A2A2A] border-white/5 cursor-pointer'
+                        : 'bg-[#1E1E1E] border-white/5 opacity-60'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex flex-col items-center flex-shrink-0">
+                      <div className="bg-carris-yellow text-carris-dark font-black text-sm px-2.5 py-1 rounded min-w-[3rem] text-center">
+                        {eta.line_id}
+                      </div>
+                      {/* Historical reliability badge */}
+                      {reliabilityLabel && (
+                        <span className="text-[9px] text-gray-500 mt-0.5 whitespace-nowrap">{reliabilityLabel}</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-semibold text-sm truncate">{eta.headsign}</span>
+                      <span className="text-[11px] text-gray-400">
+                        {hasVehicle ? (
+                          <span className="flex items-center gap-1 flex-wrap">
+                            <span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full"></span>
+                            <span>Bus {eta.vehicle_id}</span>
+                            {/* Direction indicator */}
+                            {directionLabel && (
+                              <span className={`${directionColor}`}>· {directionLabel}</span>
+                            )}
+                          </span>
+                        ) : (
+                          'Agendado'
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-end whitespace-nowrap flex-shrink-0 ml-2">
+                    <div className={`font-bold text-base ${
+                      isPast ? 'text-gray-500'
+                      : !hasVehicle ? 'text-gray-400'
+                      : diffMinutes <= 3 ? 'text-green-400 animate-pulse'
+                      : diffMinutes <= 10 ? 'text-carris-yellow'
+                      : 'text-white'
+                    }`}>
+                      {displayTime}
+                    </div>
+                    <div className="text-[10px] text-gray-500 font-mono">
+                      {fromUnixTime(time).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+}

@@ -1,0 +1,24 @@
+{
+  "name": "BDT — Bus Tracker Lisboa",
+  "short_name": "BDT",
+  "description": "Acompanhe autocarros da Carris Metropolitana em tempo real. Paragens, horários e localizações ao vivo.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1A1A1A",
+  "theme_color": "#1A1A1A",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["transportation", "navigation", "utilities"]
+}

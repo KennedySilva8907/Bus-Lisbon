@@ -1,0 +1,47 @@
+[
+  {
+    "estimated_arrival": "06:57:41",
+    "estimated_arrival_unix": 1773298661,
+    "headsign": "Manteigadas (Esc. Profissional)",
+    "line_id": "4410",
+    "observed_arrival": "06:56:58",
+    "observed_arrival_unix": 1773298618,
+    "pattern_id": "4410_0_2",
+    "route_id": "4410_0",
+    "scheduled_arrival": "07:07:00",
+    "scheduled_arrival_unix": 1773299220,
+    "stop_sequence": 14,
+    "trip_id": "4410_0_2|1200|0645_3N395",
+    "vehicle_id": "44|12643"
+  },
+  {
+    "estimated_arrival": "07:53:06",
+    "estimated_arrival_unix": 1773301986,
+    "headsign": "Setúbal (ITS) via Manteigadas",
+    "line_id": "4417",
+    "observed_arrival": "07:52:44",
+    "observed_arrival_unix": 1773301964,
+    "pattern_id": "4417_0_1",
+    "route_id": "4417_0",
+    "scheduled_arrival": "07:54:00",
+    "scheduled_arrival_unix": 1773302040,
+    "stop_sequence": 13,
+    "trip_id": "4417_0_1|1200|0735_3N395",
+    "vehicle_id": "44|12731"
+  },
+  {
+    "estimated_arrival": "07:51:02",
+    "estimated_arrival_unix": 1773301862,
+    "headsign": "Manteigadas (Esc. Profissional)",
+    "line_id": "4410",
+    "observed_arrival": "07:50:30",
+    "observed_arrival_unix": 1773301830,
+    "pattern_id": "4410_0_2",
+    "route_id": "4410_0",
+    "scheduled_arrival": "07:57:00",
+    "scheduled_arrival_unix": 1773302220,
+    "stop_sequence": 14,
+    "trip_id": "4410_0_2|1200|0735_3N395",
+    "vehicle_id": "44|12524"
+  }
+]

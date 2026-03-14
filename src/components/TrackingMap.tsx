@@ -169,24 +169,44 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop
 
 // ── Main Component ────────────────────────────────────
 
-export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedPatternId, selectedStop, isDarkMap, onToggleMapTheme }: TrackingMapProps) {
+export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedPatternId, selectedStop, isDarkMap, onToggleMapTheme, isPanelOpen, isPanelExpanded }: TrackingMapProps) {
   const { stops, isLoading: isLoadingStops } = useStops();
   const { vehicle } = useSingleVehicle(selectedVehicleId || null);
   const mapRef = useRef<L.Map | null>(null);
+  const [userFreeNav, setUserFreeNav] = useState(false);
+
+  // Reset free navigation when a NEW vehicle is selected
+  const prevVehicleId = useRef<string | null>(null);
+  useEffect(() => {
+    if (selectedVehicleId && selectedVehicleId !== prevVehicleId.current) {
+      setUserFreeNav(false);
+    }
+    prevVehicleId.current = selectedVehicleId || null;
+  }, [selectedVehicleId]);
 
   const handleStopSelect = useCallback((stop: Stop) => {
     onStopSelect(stop);
   }, [onStopSelect]);
 
   const handleLocate = () => {
+    setUserFreeNav(true); // user navigated away
     mapRef.current?.locate().on("locationfound", (loc) => mapRef.current?.flyTo(loc.latlng, 15));
   };
 
   const handleBackToStop = () => {
     if (!selectedStop) return;
+    setUserFreeNav(true); // user wants freedom to navigate
     const lat = Number(selectedStop.lat);
     const lon = Number(selectedStop.lon);
     if (!isNaN(lat) && !isNaN(lon)) mapRef.current?.flyTo([lat, lon], 16, { animate: true });
+  };
+
+  // Calculate bottom offset for buttons based on panel state (mobile only)
+  // Panel is 55% height. When expanded: buttons above panel. When collapsed: above 80px peek.
+  const getButtonsBottom = () => {
+    if (!isPanelOpen) return 'bottom-4 md:bottom-6';
+    if (isPanelExpanded) return 'bottom-[calc(55%+1rem)] md:bottom-6';
+    return 'bottom-[calc(80px+1rem)] md:bottom-6';
   };
 
   return (
@@ -211,11 +231,11 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
         <SelectedStopMarker stop={selectedStop || null} />
         {vehicle && <BusMarker vehicle={vehicle} isSelected={true} />}
         <PatternShape selectedPatternId={selectedPatternId} />
-<VehicleTracker vehicle={vehicle} disabled={false} />
+        <VehicleTracker vehicle={vehicle} disabled={userFreeNav} />
       </MapContainer>
 
       {/* All control buttons — OUTSIDE MapContainer for reliable React events */}
-      <div className="absolute bottom-4 right-4 md:bottom-6 md:right-6 z-[1001] flex flex-col gap-3 items-center pointer-events-none">
+      <div className={`absolute ${getButtonsBottom()} right-4 md:right-6 z-[1001] flex flex-col gap-3 items-center pointer-events-none transition-all duration-300`}>
         {/* Map theme toggle */}
         <button
           className={`pointer-events-auto w-11 h-11 rounded-full shadow-lg border flex items-center justify-center active:scale-95 transition-all ${

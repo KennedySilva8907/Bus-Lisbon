@@ -2,7 +2,7 @@ import { useStopETA, type Stop } from '../services/api';
 import { fromUnixTime } from 'date-fns';
 import { X, Star } from 'lucide-react';
 import { useRef, useEffect } from 'react';
-import { recordDeviation, getLineReliability } from '../services/history';
+import { recordDeviation } from '../services/history';
 
 interface StopDetailsPanelProps {
   stop: Stop | null;
@@ -102,16 +102,16 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
         <div className="w-10 h-1 bg-gray-500 rounded-full"></div>
       </div>
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-5 text-white custom-scrollbar flex flex-col">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4 text-white custom-scrollbar flex flex-col">
         {/* Header */}
-        <div className="flex justify-between items-center mb-5" onClick={() => !isExpanded && onToggleExpand()}>
+        <div className="flex justify-between items-center mb-3" onClick={() => !isExpanded && onToggleExpand()}>
           <div className="min-w-0 flex-1">
-            <h2 className="text-xl font-bold tracking-tight text-carris-light leading-tight truncate">{stop.name}</h2>
-            <div className="text-carris-yellow text-xs font-medium mt-1 flex items-center gap-2">
-              <span className="bg-carris-yellow/10 px-2 py-0.5 rounded text-carris-yellow border border-carris-yellow/20">
+            <h2 className="text-lg font-bold tracking-tight text-carris-light leading-tight truncate">{stop.name}</h2>
+            <div className="text-carris-yellow text-xs font-medium mt-0.5 flex items-center gap-2">
+              <span className="bg-carris-yellow/10 px-1.5 py-0.5 rounded text-[11px] text-carris-yellow border border-carris-yellow/20">
                 #{stop.id}
               </span>
-              {stop.locality && <span className="opacity-70 text-gray-300 truncate">{stop.locality}</span>}
+              {stop.locality && <span className="opacity-70 text-gray-300 text-[12px] truncate">{stop.locality}</span>}
             </div>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
@@ -136,8 +136,8 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
         </div>
 
         {/* ETA List */}
-        <div className="flex-1 space-y-2">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 border-b border-gray-700 pb-2">
+        <div className="flex-1 space-y-1.5">
+          <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 border-b border-white/5 pb-1.5">
             Próximas Chegadas
           </h3>
 
@@ -160,43 +160,33 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
               // Direction / punctuality indicator
               let directionLabel = '';
               let directionColor = 'text-gray-400';
+              let directionBg = 'bg-gray-400/10';
               if (hasVehicle && eta.estimated_arrival_unix && eta.scheduled_arrival_unix) {
                 const delaySec = eta.estimated_arrival_unix - eta.scheduled_arrival_unix;
                 if (delaySec < -60) {
                   directionLabel = 'Adiantado';
                   directionColor = 'text-blue-400';
+                  directionBg = 'bg-blue-400/10';
                 } else if (delaySec > 120) {
                   const delayMin = Math.round(delaySec / 60);
-                  directionLabel = `Atrasado ${delayMin} min`;
+                  directionLabel = `+${delayMin}min`;
                   directionColor = 'text-orange-400';
+                  directionBg = 'bg-orange-400/10';
                 } else {
                   directionLabel = 'Pontual';
                   directionColor = 'text-green-400';
-                }
-              }
-
-              // Historical reliability
-              const reliability = getLineReliability(eta.line_id, stop.id);
-              let reliabilityLabel = '';
-              if (reliability) {
-                const avgMin = Math.round(reliability.avgDelaySec / 60);
-                if (avgMin > 1) {
-                  reliabilityLabel = `~${avgMin} min atraso`;
-                } else if (avgMin < -1) {
-                  reliabilityLabel = `~${Math.abs(avgMin)} min adiantado`;
-                } else {
-                  reliabilityLabel = 'Geralmente pontual';
+                  directionBg = 'bg-green-400/10';
                 }
               }
 
               // Human-friendly time display
               let displayTime: string;
               if (isPast) {
-                displayTime = `Há ${Math.abs(diffMinutes)} min`;
+                displayTime = `Há ${Math.abs(diffMinutes)}min`;
               } else if (diffMinutes === 0) {
                 displayTime = 'Agora';
               } else if (diffMinutes < 60) {
-                displayTime = `${diffMinutes} min`;
+                displayTime = `${diffMinutes}min`;
               } else {
                 const hours = Math.floor(diffMinutes / 60);
                 const mins = diffMinutes % 60;
@@ -211,45 +201,53 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                       onVehicleSelect(eta.vehicle_id, eta.pattern_id);
                     }
                   }}
-                  className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                  className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
                     isSelected
-                      ? 'bg-carris-yellow/10 border-carris-yellow ring-1 ring-carris-yellow'
+                      ? 'bg-carris-yellow/10 border-carris-yellow/40 ring-1 ring-carris-yellow/30'
                       : hasVehicle
-                        ? 'bg-[#232323] hover:bg-[#2A2A2A] border-white/5 cursor-pointer'
-                        : 'bg-[#1E1E1E] border-white/5 opacity-60'
+                        ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/5 cursor-pointer active:scale-[0.98]'
+                        : 'bg-transparent border-white/[0.03] opacity-50'
                   }`}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex flex-col items-center flex-shrink-0">
-                      <div className="bg-carris-yellow text-carris-dark font-black text-sm px-2.5 py-1 rounded min-w-[3rem] text-center">
-                        {eta.line_id}
-                      </div>
-                      {/* Historical reliability badge */}
-                      {reliabilityLabel && (
-                        <span className="text-[9px] text-gray-500 mt-0.5 whitespace-nowrap">{reliabilityLabel}</span>
-                      )}
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-semibold text-sm truncate">{eta.headsign}</span>
-                      <span className="text-[11px] text-gray-400">
-                        {hasVehicle ? (
-                          <span className="flex items-center gap-1 flex-wrap">
-                            <span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full"></span>
-                            <span>Bus {eta.vehicle_id}</span>
-                            {/* Direction indicator */}
-                            {directionLabel && (
-                              <span className={`${directionColor}`}>· {directionLabel}</span>
-                            )}
-                          </span>
-                        ) : (
-                          'Agendado'
-                        )}
-                      </span>
+                  {/* Line badge */}
+                  <div className="flex-shrink-0 w-14 text-center">
+                    <div className={`font-black text-sm px-2 py-1.5 rounded-lg ${
+                      isSelected
+                        ? 'bg-carris-yellow text-carris-dark'
+                        : hasVehicle
+                          ? 'bg-carris-yellow text-carris-dark'
+                          : 'bg-white/10 text-gray-400'
+                    }`}>
+                      {eta.line_id}
                     </div>
                   </div>
 
-                  <div className="flex flex-col items-end whitespace-nowrap flex-shrink-0 ml-2">
-                    <div className={`font-bold text-base ${
+                  {/* Middle: destination + status */}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-[13px] truncate leading-tight">{eta.headsign}</div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {hasVehicle ? (
+                        <>
+                          <span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0"></span>
+                          <span className="text-[11px] text-gray-400 truncate">Em viagem</span>
+                          {directionLabel && (
+                            <span className={`text-[10px] ${directionColor} ${directionBg} px-1.5 py-0.5 rounded-full flex-shrink-0`}>
+                              {directionLabel}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="inline-block w-1.5 h-1.5 bg-gray-500 rounded-full flex-shrink-0"></span>
+                          <span className="text-[11px] text-gray-500">Agendado</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: time */}
+                  <div className="flex-shrink-0 text-right pl-2">
+                    <div className={`font-bold text-[15px] leading-tight ${
                       isPast ? 'text-gray-500'
                       : !hasVehicle ? 'text-gray-400'
                       : diffMinutes <= 3 ? 'text-green-400 animate-pulse'
@@ -258,7 +256,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                     }`}>
                       {displayTime}
                     </div>
-                    <div className="text-[10px] text-gray-500 font-mono">
+                    <div className="text-[10px] text-gray-500 font-mono leading-tight mt-0.5">
                       {fromUnixTime(time).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>

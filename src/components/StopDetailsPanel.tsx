@@ -10,12 +10,13 @@ interface StopDetailsPanelProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   selectedVehicleId?: string | null;
-  onVehicleSelect?: (vehicleId: string, patternId?: string) => void;
+  selectedPatternId?: string | null;
+  onVehicleSelect?: (vehicleId: string | null, patternId?: string, lineId?: string) => void;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
 }
 
-export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleExpand, selectedVehicleId, onVehicleSelect, isFavorite, onToggleFavorite }: StopDetailsPanelProps) {
+export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleExpand, selectedVehicleId, selectedPatternId, onVehicleSelect, isFavorite, onToggleFavorite }: StopDetailsPanelProps) {
   const { etas, isLoading } = useStopETA(stop?.id || null);
   const panelRef = useRef<HTMLElement>(null);
   const touchRef = useRef({ startY: 0, isDragging: false });
@@ -155,7 +156,9 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
               const diffMinutes = Math.round((time - nowUnix) / 60);
               const isPast = diffMinutes < 0;
               const hasVehicle = !!eta.vehicle_id;
-              const isSelected = selectedVehicleId === eta.vehicle_id;
+              const isSelected = hasVehicle
+                ? selectedVehicleId === eta.vehicle_id
+                : !selectedVehicleId && selectedPatternId === eta.pattern_id;
 
               // Direction / punctuality indicator
               let directionLabel = '';
@@ -197,16 +200,16 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                 <div
                   key={`${eta.vehicle_id || eta.line_id}-${i}`}
                   onClick={() => {
-                    if (hasVehicle && onVehicleSelect) {
-                      onVehicleSelect(eta.vehicle_id, eta.pattern_id);
+                    if (onVehicleSelect) {
+                      onVehicleSelect(eta.vehicle_id || null, eta.pattern_id, eta.line_id);
                     }
                   }}
-                  className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
+                  className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer active:scale-[0.98] ${
                     isSelected
                       ? 'bg-carris-yellow/10 border-carris-yellow/40 ring-1 ring-carris-yellow/30'
                       : hasVehicle
-                        ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/5 cursor-pointer active:scale-[0.98]'
-                        : 'bg-transparent border-white/[0.03] opacity-50'
+                        ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/5'
+                        : 'bg-white/[0.02] hover:bg-white/[0.05] border-white/[0.03]'
                   }`}
                 >
                   {/* Line badge */}
@@ -216,7 +219,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                         ? 'bg-carris-yellow text-carris-dark'
                         : hasVehicle
                           ? 'bg-carris-yellow text-carris-dark'
-                          : 'bg-white/10 text-gray-400'
+                          : 'bg-carris-yellow/30 text-carris-yellow/80'
                     }`}>
                       {eta.line_id}
                     </div>
@@ -249,9 +252,9 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                   <div className="flex-shrink-0 text-right pl-2">
                     <div className={`font-bold text-[15px] leading-tight ${
                       isPast ? 'text-gray-500'
-                      : !hasVehicle ? 'text-gray-400'
-                      : diffMinutes <= 3 ? 'text-green-400 animate-pulse'
+                      : diffMinutes <= 3 && hasVehicle ? 'text-green-400 animate-pulse'
                       : diffMinutes <= 10 ? 'text-carris-yellow'
+                      : !hasVehicle ? 'text-gray-300'
                       : 'text-white'
                     }`}>
                       {displayTime}

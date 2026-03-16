@@ -64,20 +64,25 @@ export function useStops() {
 // ── Single Vehicle (only fetches when vehicleId is set) ─
 // Uses the LIGHTER v1 endpoint (~400KB vs 1.2MB from v2)
 
-export function useSingleVehicle(vehicleId: string | null) {
+export function useSingleVehicle(vehicleId: string | null, lineId?: string | null, patternId?: string | null) {
+  const shouldFetch = !!(vehicleId || lineId);
   const { data, error, isLoading } = useSWR<Vehicle[]>(
-    vehicleId ? `${API_BASE_URL}/v2/vehicles` : null,
+    shouldFetch ? `${API_BASE_URL}/v2/vehicles` : null,
     fetcher,
     {
-      refreshInterval: vehicleId ? 5000 : 0,
+      refreshInterval: shouldFetch ? 5000 : 0,
       revalidateOnFocus: false,
       dedupingInterval: 4000,
       keepPreviousData: true,
     }
   );
 
-  const vehicle = vehicleId && data
-    ? data.find(v => v.id === vehicleId) || null
+  const vehicle = data
+    ? (vehicleId
+        ? data.find(v => v.id === vehicleId)
+        : lineId
+          ? data.find(v => v.line_id === lineId && (!patternId || v.pattern_id === patternId))
+          : null) || null
     : null;
 
   return { vehicle, isLoading, isError: error };

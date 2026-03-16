@@ -9,6 +9,7 @@ function App() {
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [isPanelExpanded, setIsPanelExpanded] = useState(true);
   const [isDarkMap, setIsDarkMap] = useState(() => {
     const saved = localStorage.getItem('bdt-dark-map');
@@ -29,6 +30,7 @@ function App() {
     setSelectedStop(stop);
     setSelectedVehicleId(null);
     setSelectedPatternId(null);
+    setSelectedLineId(null);
     setIsPanelExpanded(true);
   };
 
@@ -44,6 +46,7 @@ function App() {
           onStopSelect={handleStopSelect}
           selectedVehicleId={selectedVehicleId}
           selectedPatternId={selectedPatternId}
+          selectedLineId={selectedLineId}
           selectedStop={selectedStop}
           isDarkMap={isDarkMap}
           onToggleMapTheme={toggleMapTheme}
@@ -58,9 +61,10 @@ function App() {
           stop={selectedStop}
           isExpanded={isPanelExpanded}
           onToggleExpand={() => setIsPanelExpanded(!isPanelExpanded)}
-          onClose={() => { setSelectedStop(null); setSelectedVehicleId(null); setSelectedPatternId(null); }}
+          onClose={() => { setSelectedStop(null); setSelectedVehicleId(null); setSelectedPatternId(null); setSelectedLineId(null); }}
           selectedVehicleId={selectedVehicleId}
-          onVehicleSelect={(vid, pid) => { setSelectedVehicleId(vid); setSelectedPatternId(pid || null); }}
+          selectedPatternId={selectedPatternId}
+          onVehicleSelect={(vid, pid, lid) => { setSelectedVehicleId(vid); setSelectedPatternId(pid || null); setSelectedLineId(lid || null); }}
           isFavorite={selectedStop ? isFavorite(selectedStop.id) : false}
           onToggleFavorite={() => selectedStop && toggleFavorite(selectedStop.id)}
         />

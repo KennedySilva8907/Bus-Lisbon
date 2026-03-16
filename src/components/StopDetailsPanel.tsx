@@ -156,15 +156,17 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
               const diffMinutes = Math.round((time - nowUnix) / 60);
               const isPast = diffMinutes < 0;
               const hasVehicle = !!eta.vehicle_id;
+              const hasEstimate = !hasVehicle && !!eta.estimated_arrival_unix && eta.estimated_arrival_unix !== eta.scheduled_arrival_unix;
+              const isTracked = hasVehicle || hasEstimate; // has some form of real-time data
               const isSelected = hasVehicle
                 ? selectedVehicleId === eta.vehicle_id
                 : !selectedVehicleId && selectedPatternId === eta.pattern_id;
 
-              // Direction / punctuality indicator
+              // Direction / punctuality indicator (works for both tracked and estimated)
               let directionLabel = '';
               let directionColor = 'text-gray-400';
               let directionBg = 'bg-gray-400/10';
-              if (hasVehicle && eta.estimated_arrival_unix && eta.scheduled_arrival_unix) {
+              if (eta.estimated_arrival_unix && eta.scheduled_arrival_unix) {
                 const delaySec = eta.estimated_arrival_unix - eta.scheduled_arrival_unix;
                 if (delaySec < -60) {
                   directionLabel = 'Adiantado';
@@ -207,7 +209,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                   className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer active:scale-[0.98] ${
                     isSelected
                       ? 'bg-carris-yellow/10 border-carris-yellow/40 ring-1 ring-carris-yellow/30'
-                      : hasVehicle
+                      : isTracked
                         ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/5'
                         : 'bg-white/[0.02] hover:bg-white/[0.05] border-white/[0.03]'
                   }`}
@@ -217,7 +219,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                     <div className={`font-black text-sm px-2 py-1.5 rounded-lg ${
                       isSelected
                         ? 'bg-carris-yellow text-carris-dark'
-                        : hasVehicle
+                        : isTracked
                           ? 'bg-carris-yellow text-carris-dark'
                           : 'bg-carris-yellow/30 text-carris-yellow/80'
                     }`}>
@@ -233,17 +235,22 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                         <>
                           <span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0"></span>
                           <span className="text-[11px] text-gray-400 truncate">Em viagem</span>
-                          {directionLabel && (
-                            <span className={`text-[10px] ${directionColor} ${directionBg} px-1.5 py-0.5 rounded-full flex-shrink-0`}>
-                              {directionLabel}
-                            </span>
-                          )}
+                        </>
+                      ) : hasEstimate ? (
+                        <>
+                          <span className="inline-block w-1.5 h-1.5 bg-carris-yellow rounded-full flex-shrink-0"></span>
+                          <span className="text-[11px] text-carris-yellow/70 truncate">Previsto</span>
                         </>
                       ) : (
                         <>
                           <span className="inline-block w-1.5 h-1.5 bg-gray-500 rounded-full flex-shrink-0"></span>
                           <span className="text-[11px] text-gray-500">Agendado</span>
                         </>
+                      )}
+                      {directionLabel && (
+                        <span className={`text-[10px] ${directionColor} ${directionBg} px-1.5 py-0.5 rounded-full flex-shrink-0`}>
+                          {directionLabel}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -252,9 +259,9 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                   <div className="flex-shrink-0 text-right pl-2">
                     <div className={`font-bold text-[15px] leading-tight ${
                       isPast ? 'text-gray-500'
-                      : diffMinutes <= 3 && hasVehicle ? 'text-green-400 animate-pulse'
+                      : diffMinutes <= 3 && isTracked ? 'text-green-400 animate-pulse'
                       : diffMinutes <= 10 ? 'text-carris-yellow'
-                      : !hasVehicle ? 'text-gray-300'
+                      : !isTracked ? 'text-gray-300'
                       : 'text-white'
                     }`}>
                       {displayTime}

@@ -57,6 +57,7 @@ interface TrackingMapProps {
   onStopSelect: (stop: Stop) => void;
   selectedVehicleId?: string | null;
   selectedPatternId?: string | null;
+  selectedLineId?: string | null;
   selectedStop?: Stop | null;
   isDarkMap: boolean;
   onToggleMapTheme: () => void;
@@ -169,9 +170,9 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop
 
 // ── Main Component ────────────────────────────────────
 
-export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedPatternId, selectedStop, isDarkMap, onToggleMapTheme, isPanelOpen, isPanelExpanded }: TrackingMapProps) {
+export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedPatternId, selectedLineId, selectedStop, isDarkMap, onToggleMapTheme, isPanelOpen, isPanelExpanded }: TrackingMapProps) {
   const { stops, isLoading: isLoadingStops } = useStops();
-  const { vehicle } = useSingleVehicle(selectedVehicleId || null);
+  const { vehicle } = useSingleVehicle(selectedVehicleId || null, selectedLineId, selectedPatternId);
   const mapRef = useRef<L.Map | null>(null);
   const [userFreeNav, setUserFreeNav] = useState(false);
 

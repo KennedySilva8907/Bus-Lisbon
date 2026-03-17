@@ -19,7 +19,7 @@ interface StopDetailsPanelProps {
 export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleExpand, selectedVehicleId, selectedPatternId, onVehicleSelect, isFavorite, onToggleFavorite }: StopDetailsPanelProps) {
   const { etas, isLoading } = useStopETA(stop?.id || null);
   const panelRef = useRef<HTMLElement>(null);
-  const touchRef = useRef({ startY: 0, isDragging: false });
+  const touchRef = useRef({ startY: 0, isDragging: false, isOnHandle: false });
 
   if (!stop) return null;
 
@@ -48,64 +48,76 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
     }
   }, [sortedEtas, stop]);
 
-  // ── Touch swipe handlers ──
-  const handleTouchStart = (e: React.TouchEvent) => {
+  // ── Touch swipe handlers (only on drag handle area, not scrollable content) ──
+  const handleHandleTouchStart = (e: React.TouchEvent) => {
     touchRef.current.startY = e.touches[0].clientY;
     touchRef.current.isDragging = true;
+    touchRef.current.isOnHandle = true;
     if (panelRef.current) {
       panelRef.current.style.transition = 'none';
     }
   };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!touchRef.current.isDragging || !panelRef.current) return;
+  const handleHandleTouchMove = (e: React.TouchEvent) => {
+    if (!touchRef.current.isOnHandle || !touchRef.current.isDragging || !panelRef.current) return;
+    e.preventDefault(); // prevent scroll while dragging handle
     const deltaY = e.touches[0].clientY - touchRef.current.startY;
 
     if (isExpanded && deltaY > 0) {
-      // Dragging down while expanded
       panelRef.current.style.transform = `translateY(${deltaY}px)`;
     } else if (!isExpanded && deltaY < 0) {
-      // Dragging up while collapsed
       const clampedDelta = Math.max(deltaY, -(window.innerHeight * 0.55 - 80));
       panelRef.current.style.transform = `translateY(calc(100% - 80px + ${clampedDelta}px))`;
     }
   };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!panelRef.current) return;
+  const handleHandleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchRef.current.isOnHandle || !panelRef.current) {
+      touchRef.current.isOnHandle = false;
+      touchRef.current.isDragging = false;
+      return;
+    }
     const deltaY = e.changedTouches[0].clientY - touchRef.current.startY;
     touchRef.current.isDragging = false;
+    touchRef.current.isOnHandle = false;
 
-    // Restore CSS transition
     panelRef.current.style.transition = '';
     panelRef.current.style.transform = '';
 
-    // Threshold: 50px to toggle
     if (Math.abs(deltaY) > 50) {
-      if (deltaY > 0 && isExpanded) onToggleExpand();  // swipe down = collapse
-      if (deltaY < 0 && !isExpanded) onToggleExpand(); // swipe up = expand
+      if (deltaY > 0 && isExpanded) onToggleExpand();
+      if (deltaY < 0 && !isExpanded) onToggleExpand();
     }
   };
 
   return (
     <aside
       ref={panelRef}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
       className={`absolute bottom-0 w-full md:relative md:h-full md:w-96 bg-carris-gray z-[1000] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] flex-shrink-0 flex flex-col rounded-t-3xl md:rounded-l-3xl md:rounded-tr-none transition-transform duration-300 ease-in-out ${
         isExpanded ? 'h-[55%] translate-y-0' : 'h-[55%] translate-y-[calc(100%-80px)] md:translate-y-0'
       }`}
     >
 
-      {/* Drag handle for mobile swiping */}
-      <div className="w-full flex justify-center pt-3 pb-1 md:hidden cursor-grab active:cursor-grabbing" onClick={onToggleExpand}>
+      {/* Drag handle for mobile swiping — touch gestures only here */}
+      <div
+        className="w-full flex justify-center pt-3 pb-1 md:hidden cursor-grab active:cursor-grabbing touch-none"
+        onClick={onToggleExpand}
+        onTouchStart={handleHandleTouchStart}
+        onTouchMove={handleHandleTouchMove}
+        onTouchEnd={handleHandleTouchEnd}
+      >
         <div className="w-10 h-1 bg-gray-500 rounded-full"></div>
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4 text-white custom-scrollbar flex flex-col">
         {/* Header */}
-        <div className="flex justify-between items-center mb-3" onClick={() => !isExpanded && onToggleExpand()}>
+        <div
+          className="flex justify-between items-center mb-3"
+          onClick={() => !isExpanded && onToggleExpand()}
+          onTouchStart={handleHandleTouchStart}
+          onTouchMove={handleHandleTouchMove}
+          onTouchEnd={handleHandleTouchEnd}
+        >
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-bold tracking-tight text-carris-light leading-tight truncate">{stop.name}</h2>
             <div className="text-carris-yellow text-xs font-medium mt-0.5 flex items-center gap-2">

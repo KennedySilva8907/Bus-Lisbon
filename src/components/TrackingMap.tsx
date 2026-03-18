@@ -74,14 +74,25 @@ function PatternShape({ selectedPatternId }: { selectedPatternId?: string | null
   return <Polyline positions={positions} pathOptions={{ color: '#FFCC00', weight: 4, opacity: 0.8 }} />;
 }
 
-function VehicleTracker({ vehicle, disabled }: { vehicle: Vehicle | null; disabled: boolean }) {
+function VehicleTracker({ vehicle, disabled, isPanelOpen, isPanelExpanded }: { vehicle: Vehicle | null; disabled: boolean; isPanelOpen?: boolean; isPanelExpanded?: boolean }) {
   const map = useMap();
   useEffect(() => {
     if (disabled) return;
     if (vehicle && vehicle.lat && vehicle.lon) {
-      map.flyTo([Number(vehicle.lat), Number(vehicle.lon)], 16, { animate: true });
+      const lat = Number(vehicle.lat);
+      const lon = Number(vehicle.lon);
+      // Compensate for panel height on mobile so the bus stays visible above the panel
+      if (typeof window !== 'undefined' && window.innerWidth < 768 && isPanelOpen) {
+        const panelPx = isPanelExpanded ? window.innerHeight * 0.55 : 80;
+        const targetPoint = map.project(L.latLng(lat, lon), 16);
+        const offsetPoint = L.point(targetPoint.x, targetPoint.y + panelPx / 2);
+        const offsetLatLng = map.unproject(offsetPoint, 16);
+        map.flyTo(offsetLatLng, 16, { animate: true });
+      } else {
+        map.flyTo([lat, lon], 16, { animate: true });
+      }
     }
-  }, [vehicle, map, disabled]);
+  }, [vehicle, map, disabled, isPanelOpen, isPanelExpanded]);
   return null;
 }
 
@@ -298,7 +309,7 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
         <SelectedStopMarker stop={selectedStop || null} />
         {vehicle && <BusMarker vehicle={vehicle} isSelected={true} />}
         <PatternShape selectedPatternId={selectedPatternId} />
-        <VehicleTracker vehicle={vehicle} disabled={userFreeNav} />
+        <VehicleTracker vehicle={vehicle} disabled={userFreeNav} isPanelOpen={isPanelOpen} isPanelExpanded={isPanelExpanded} />
       </MapContainer>
 
       {/* All control buttons — OUTSIDE MapContainer for reliable React events */}

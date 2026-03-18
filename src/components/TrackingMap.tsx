@@ -57,6 +57,7 @@ interface TrackingMapProps {
   onStopSelect: (stop: Stop) => void;
   selectedVehicleId?: string | null;
   selectedPatternId?: string | null;
+  selectedLineId?: string | null;
   selectedStop?: Stop | null;
   isDarkMap: boolean;
   onToggleMapTheme: () => void;
@@ -84,21 +85,49 @@ function VehicleTracker({ vehicle, disabled }: { vehicle: Vehicle | null; disabl
   return null;
 }
 
-function AutoLocate() {
+// Blue user location marker icon
+const userLocationIcon = new L.DivIcon({
+  className: 'bg-transparent',
+  html: `<div class="relative w-8 h-8 flex items-center justify-center">
+    <div class="absolute w-8 h-8 bg-blue-500 opacity-20 rounded-full animate-ping"></div>
+    <div class="absolute w-5 h-5 bg-blue-400/20 rounded-full"></div>
+    <div class="w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-lg"></div>
+  </div>`,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+});
+
+function UserLocationLayer({ onLocationFound }: { onLocationFound?: (latlng: L.LatLng) => void }) {
   const map = useMap();
-  const hasLocated = useRef(false);
+  const [position, setPosition] = useState<L.LatLng | null>(null);
+  const hasInitialLocate = useRef(false);
+
   useEffect(() => {
-    if (hasLocated.current) return;
-    hasLocated.current = true;
-    if (sessionStorage.getItem('bdt-located')) return;
-    map.locate({ setView: false, maxZoom: 15 });
-    map.once('locationfound', (e) => {
-      map.flyTo(e.latlng, 15, { animate: true, duration: 1.5 });
-      sessionStorage.setItem('bdt-located', '1');
-    });
-    map.once('locationerror', () => {});
-  }, [map]);
-  return null;
+    // Start watching position continuously
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const latlng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+        setPosition(latlng);
+        onLocationFound?.(latlng);
+
+        // Auto-fly to user on first locate (once per session)
+        if (!hasInitialLocate.current) {
+          hasInitialLocate.current = true;
+          if (!sessionStorage.getItem('bdt-located')) {
+            map.flyTo(latlng, 15, { animate: true, duration: 1.5 });
+            sessionStorage.setItem('bdt-located', '1');
+          }
+        }
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [map, onLocationFound]);
+
+  if (!position) return null;
+  return <Marker position={position} icon={userLocationIcon} zIndexOffset={400} />;
 }
 
 // Exposes map instance to parent via ref
@@ -129,6 +158,17 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop
     zoomend: (e) => { setBounds(e.target.getBounds()); setZoom(e.target.getZoom()); },
   });
 
+  // Scale marker radius with zoom level so stops stay visible when zooming in
+  const markerRadius = useMemo(() => {
+    if (zoom <= 13) return 5;
+    if (zoom <= 14) return 6;
+    if (zoom <= 15) return 8;
+    if (zoom <= 16) return 10;
+    return 12;
+  }, [zoom]);
+
+  const borderWeight = zoom >= 16 ? 2 : 1.5;
+
   const visibleStops = useMemo(() => {
     if (zoom < 13 || !bounds) return [];
     const results: Stop[] = [];
@@ -152,8 +192,8 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop
           <CircleMarker
             key={stop.id}
             center={[lat, lon]}
-            radius={5}
-            pathOptions={{ fillColor: '#FFCC00', fillOpacity: 0.9, color: isDarkMap ? '#0d1117' : '#1A1A1A', weight: 1.5 }}
+            radius={markerRadius}
+            pathOptions={{ fillColor: '#FFCC00', fillOpacity: 0.9, color: isDarkMap ? '#0d1117' : '#1A1A1A', weight: borderWeight }}
             eventHandlers={{ click: () => onStopSelect(stop) }}
           >
             <Popup closeButton={false}>
@@ -169,11 +209,16 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop
 
 // ── Main Component ────────────────────────────────────
 
-export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedPatternId, selectedStop, isDarkMap, onToggleMapTheme, isPanelOpen, isPanelExpanded }: TrackingMapProps) {
+export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedPatternId, selectedLineId, selectedStop, isDarkMap, onToggleMapTheme, isPanelOpen, isPanelExpanded }: TrackingMapProps) {
   const { stops, isLoading: isLoadingStops } = useStops();
-  const { vehicle } = useSingleVehicle(selectedVehicleId || null);
+  const { vehicle } = useSingleVehicle(selectedVehicleId || null, selectedLineId, selectedPatternId);
   const mapRef = useRef<L.Map | null>(null);
   const [userFreeNav, setUserFreeNav] = useState(false);
+  const userLocationRef = useRef<L.LatLng | null>(null);
+
+  const handleUserLocationFound = useCallback((latlng: L.LatLng) => {
+    userLocationRef.current = latlng;
+  }, []);
 
   // Reset free navigation when a NEW vehicle is selected
   const prevVehicleId = useRef<string | null>(null);
@@ -188,17 +233,39 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
     onStopSelect(stop);
   }, [onStopSelect]);
 
+  // Calculate vertical offset to center above the panel on mobile
+  const getPanelOffset = (): [number, number] => {
+    if (typeof window === 'undefined' || window.innerWidth >= 768) return [0, 0]; // desktop: no offset
+    if (!isPanelOpen) return [0, 0];
+    // Panel takes 55% when expanded, 80px when collapsed — shift map center up by half the panel height
+    const panelPx = isPanelExpanded ? window.innerHeight * 0.55 : 80;
+    return [0, panelPx / 2];
+  };
+
   const handleLocate = () => {
-    setUserFreeNav(true); // user navigated away
-    mapRef.current?.locate().on("locationfound", (loc) => mapRef.current?.flyTo(loc.latlng, 15));
+    setUserFreeNav(true);
+    const offset = getPanelOffset();
+    if (userLocationRef.current && mapRef.current) {
+      const targetPoint = mapRef.current.project(userLocationRef.current, 15);
+      const offsetPoint = L.point(targetPoint.x - offset[0], targetPoint.y + offset[1]);
+      const offsetLatLng = mapRef.current.unproject(offsetPoint, 15);
+      mapRef.current.flyTo(offsetLatLng, 15, { animate: true });
+    } else {
+      mapRef.current?.locate().on("locationfound", (loc) => mapRef.current?.flyTo(loc.latlng, 15));
+    }
   };
 
   const handleBackToStop = () => {
-    if (!selectedStop) return;
-    setUserFreeNav(true); // user wants freedom to navigate
+    if (!selectedStop || !mapRef.current) return;
+    setUserFreeNav(true);
     const lat = Number(selectedStop.lat);
     const lon = Number(selectedStop.lon);
-    if (!isNaN(lat) && !isNaN(lon)) mapRef.current?.flyTo([lat, lon], 16, { animate: true });
+    if (isNaN(lat) || isNaN(lon)) return;
+    const offset = getPanelOffset();
+    const targetPoint = mapRef.current.project(L.latLng(lat, lon), 16);
+    const offsetPoint = L.point(targetPoint.x - offset[0], targetPoint.y + offset[1]);
+    const offsetLatLng = mapRef.current.unproject(offsetPoint, 16);
+    mapRef.current.flyTo(offsetLatLng, 16, { animate: true });
   };
 
   // Calculate bottom offset for buttons based on panel state (mobile only)
@@ -226,7 +293,7 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
       >
         <MapRefSetter mapRef={mapRef} />
         <DynamicTileLayer isDarkMap={isDarkMap} />
-        <AutoLocate />
+        <UserLocationLayer onLocationFound={handleUserLocationFound} />
         <StopsCanvasLayer stops={stops} onStopSelect={handleStopSelect} isDarkMap={isDarkMap} />
         <SelectedStopMarker stop={selectedStop || null} />
         {vehicle && <BusMarker vehicle={vehicle} isSelected={true} />}

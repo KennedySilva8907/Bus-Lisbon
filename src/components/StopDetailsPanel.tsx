@@ -10,15 +10,16 @@ interface StopDetailsPanelProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   selectedVehicleId?: string | null;
-  onVehicleSelect?: (vehicleId: string, patternId?: string) => void;
+  selectedPatternId?: string | null;
+  onVehicleSelect?: (vehicleId: string | null, patternId?: string, lineId?: string) => void;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
 }
 
-export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleExpand, selectedVehicleId, onVehicleSelect, isFavorite, onToggleFavorite }: StopDetailsPanelProps) {
+export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleExpand, selectedVehicleId, selectedPatternId, onVehicleSelect, isFavorite, onToggleFavorite }: StopDetailsPanelProps) {
   const { etas, isLoading } = useStopETA(stop?.id || null);
   const panelRef = useRef<HTMLElement>(null);
-  const touchRef = useRef({ startY: 0, isDragging: false });
+  const touchRef = useRef({ startY: 0, isDragging: false, isOnHandle: false });
 
   if (!stop) return null;
 
@@ -47,64 +48,76 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
     }
   }, [sortedEtas, stop]);
 
-  // ── Touch swipe handlers ──
-  const handleTouchStart = (e: React.TouchEvent) => {
+  // ── Touch swipe handlers (only on drag handle area, not scrollable content) ──
+  const handleHandleTouchStart = (e: React.TouchEvent) => {
     touchRef.current.startY = e.touches[0].clientY;
     touchRef.current.isDragging = true;
+    touchRef.current.isOnHandle = true;
     if (panelRef.current) {
       panelRef.current.style.transition = 'none';
     }
   };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!touchRef.current.isDragging || !panelRef.current) return;
+  const handleHandleTouchMove = (e: React.TouchEvent) => {
+    if (!touchRef.current.isOnHandle || !touchRef.current.isDragging || !panelRef.current) return;
+    e.preventDefault(); // prevent scroll while dragging handle
     const deltaY = e.touches[0].clientY - touchRef.current.startY;
 
     if (isExpanded && deltaY > 0) {
-      // Dragging down while expanded
       panelRef.current.style.transform = `translateY(${deltaY}px)`;
     } else if (!isExpanded && deltaY < 0) {
-      // Dragging up while collapsed
       const clampedDelta = Math.max(deltaY, -(window.innerHeight * 0.55 - 80));
       panelRef.current.style.transform = `translateY(calc(100% - 80px + ${clampedDelta}px))`;
     }
   };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!panelRef.current) return;
+  const handleHandleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchRef.current.isOnHandle || !panelRef.current) {
+      touchRef.current.isOnHandle = false;
+      touchRef.current.isDragging = false;
+      return;
+    }
     const deltaY = e.changedTouches[0].clientY - touchRef.current.startY;
     touchRef.current.isDragging = false;
+    touchRef.current.isOnHandle = false;
 
-    // Restore CSS transition
     panelRef.current.style.transition = '';
     panelRef.current.style.transform = '';
 
-    // Threshold: 50px to toggle
     if (Math.abs(deltaY) > 50) {
-      if (deltaY > 0 && isExpanded) onToggleExpand();  // swipe down = collapse
-      if (deltaY < 0 && !isExpanded) onToggleExpand(); // swipe up = expand
+      if (deltaY > 0 && isExpanded) onToggleExpand();
+      if (deltaY < 0 && !isExpanded) onToggleExpand();
     }
   };
 
   return (
     <aside
       ref={panelRef}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
       className={`absolute bottom-0 w-full md:relative md:h-full md:w-96 bg-carris-gray z-[1000] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] flex-shrink-0 flex flex-col rounded-t-3xl md:rounded-l-3xl md:rounded-tr-none transition-transform duration-300 ease-in-out ${
         isExpanded ? 'h-[55%] translate-y-0' : 'h-[55%] translate-y-[calc(100%-80px)] md:translate-y-0'
       }`}
     >
 
-      {/* Drag handle for mobile swiping */}
-      <div className="w-full flex justify-center pt-3 pb-1 md:hidden cursor-grab active:cursor-grabbing" onClick={onToggleExpand}>
+      {/* Drag handle for mobile swiping — touch gestures only here */}
+      <div
+        className="w-full flex justify-center pt-3 pb-1 md:hidden cursor-grab active:cursor-grabbing touch-none"
+        onClick={onToggleExpand}
+        onTouchStart={handleHandleTouchStart}
+        onTouchMove={handleHandleTouchMove}
+        onTouchEnd={handleHandleTouchEnd}
+      >
         <div className="w-10 h-1 bg-gray-500 rounded-full"></div>
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4 text-white custom-scrollbar flex flex-col">
         {/* Header */}
-        <div className="flex justify-between items-center mb-3" onClick={() => !isExpanded && onToggleExpand()}>
+        <div
+          className="flex justify-between items-center mb-3"
+          onClick={() => !isExpanded && onToggleExpand()}
+          onTouchStart={handleHandleTouchStart}
+          onTouchMove={handleHandleTouchMove}
+          onTouchEnd={handleHandleTouchEnd}
+        >
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-bold tracking-tight text-carris-light leading-tight truncate">{stop.name}</h2>
             <div className="text-carris-yellow text-xs font-medium mt-0.5 flex items-center gap-2">
@@ -155,13 +168,17 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
               const diffMinutes = Math.round((time - nowUnix) / 60);
               const isPast = diffMinutes < 0;
               const hasVehicle = !!eta.vehicle_id;
-              const isSelected = selectedVehicleId === eta.vehicle_id;
+              const hasEstimate = !hasVehicle && !!eta.estimated_arrival_unix && eta.estimated_arrival_unix !== eta.scheduled_arrival_unix;
+              const isTracked = hasVehicle || hasEstimate; // has some form of real-time data
+              const isSelected = hasVehicle
+                ? selectedVehicleId === eta.vehicle_id
+                : !selectedVehicleId && selectedPatternId === eta.pattern_id;
 
-              // Direction / punctuality indicator
+              // Direction / punctuality indicator (works for both tracked and estimated)
               let directionLabel = '';
               let directionColor = 'text-gray-400';
               let directionBg = 'bg-gray-400/10';
-              if (hasVehicle && eta.estimated_arrival_unix && eta.scheduled_arrival_unix) {
+              if (eta.estimated_arrival_unix && eta.scheduled_arrival_unix) {
                 const delaySec = eta.estimated_arrival_unix - eta.scheduled_arrival_unix;
                 if (delaySec < -60) {
                   directionLabel = 'Adiantado';
@@ -197,16 +214,16 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                 <div
                   key={`${eta.vehicle_id || eta.line_id}-${i}`}
                   onClick={() => {
-                    if (hasVehicle && onVehicleSelect) {
-                      onVehicleSelect(eta.vehicle_id, eta.pattern_id);
+                    if (onVehicleSelect) {
+                      onVehicleSelect(eta.vehicle_id || null, eta.pattern_id, eta.line_id);
                     }
                   }}
-                  className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
+                  className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer active:scale-[0.98] ${
                     isSelected
                       ? 'bg-carris-yellow/10 border-carris-yellow/40 ring-1 ring-carris-yellow/30'
-                      : hasVehicle
-                        ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/5 cursor-pointer active:scale-[0.98]'
-                        : 'bg-transparent border-white/[0.03] opacity-50'
+                      : isTracked
+                        ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/5'
+                        : 'bg-white/[0.02] hover:bg-white/[0.05] border-white/[0.03]'
                   }`}
                 >
                   {/* Line badge */}
@@ -214,9 +231,9 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                     <div className={`font-black text-sm px-2 py-1.5 rounded-lg ${
                       isSelected
                         ? 'bg-carris-yellow text-carris-dark'
-                        : hasVehicle
+                        : isTracked
                           ? 'bg-carris-yellow text-carris-dark'
-                          : 'bg-white/10 text-gray-400'
+                          : 'bg-carris-yellow/30 text-carris-yellow/80'
                     }`}>
                       {eta.line_id}
                     </div>
@@ -230,17 +247,22 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                         <>
                           <span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0"></span>
                           <span className="text-[11px] text-gray-400 truncate">Em viagem</span>
-                          {directionLabel && (
-                            <span className={`text-[10px] ${directionColor} ${directionBg} px-1.5 py-0.5 rounded-full flex-shrink-0`}>
-                              {directionLabel}
-                            </span>
-                          )}
+                        </>
+                      ) : hasEstimate ? (
+                        <>
+                          <span className="inline-block w-1.5 h-1.5 bg-carris-yellow rounded-full flex-shrink-0"></span>
+                          <span className="text-[11px] text-carris-yellow/70 truncate">Previsto</span>
                         </>
                       ) : (
                         <>
                           <span className="inline-block w-1.5 h-1.5 bg-gray-500 rounded-full flex-shrink-0"></span>
                           <span className="text-[11px] text-gray-500">Agendado</span>
                         </>
+                      )}
+                      {directionLabel && (
+                        <span className={`text-[10px] ${directionColor} ${directionBg} px-1.5 py-0.5 rounded-full flex-shrink-0`}>
+                          {directionLabel}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -249,9 +271,9 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                   <div className="flex-shrink-0 text-right pl-2">
                     <div className={`font-bold text-[15px] leading-tight ${
                       isPast ? 'text-gray-500'
-                      : !hasVehicle ? 'text-gray-400'
-                      : diffMinutes <= 3 ? 'text-green-400 animate-pulse'
+                      : diffMinutes <= 3 && isTracked ? 'text-green-400 animate-pulse'
                       : diffMinutes <= 10 ? 'text-carris-yellow'
+                      : !isTracked ? 'text-gray-300'
                       : 'text-white'
                     }`}>
                       {displayTime}

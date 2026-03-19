@@ -131,7 +131,7 @@ function UserLocationLayer({ onLocationFound }: { onLocationFound?: (latlng: L.L
         }
       },
       () => {},
-      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);

@@ -35,7 +35,7 @@ function App() {
   };
 
   return (
-    <div className="w-screen h-screen relative bg-carris-dark overflow-hidden flex flex-col md:flex-row">
+    <div className="w-screen relative bg-carris-dark overflow-hidden flex flex-col md:flex-row" style={{ height: '100dvh' }}>
 
       {/* Search Bar Overlay */}
       <SearchBar onStopSelect={handleStopSelect} favorites={favorites} />

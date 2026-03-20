@@ -1,6 +1,6 @@
 {
-  "name": "BDT — Bus Tracker Lisboa",
-  "short_name": "BDT",
+  "name": "Bus Lisbon",
+  "short_name": "Bus Lisbon",
   "description": "Acompanhe autocarros da Carris Metropolitana em tempo real. Paragens, horários e localizações ao vivo.",
   "start_url": "/",
   "display": "standalone",

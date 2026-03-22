@@ -1,6 +1,6 @@
 import { MapContainer, useMap, Polyline, CircleMarker, Marker, Popup, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { useAllStops, useSingleVehicle, usePatternShape, type Stop, type Vehicle } from '../services/api';
+import { useAllStops, useAllVehicles, useSingleVehicle, usePatternShape, type Stop, type Vehicle } from '../services/api';
 import { useEffect, memo, useCallback, useState, useMemo, useRef } from 'react';
 import BusMarker from './BusMarker';
 import { getOperatorColor, getStopOperatorColor, isCarrisLisboa, isCarrisLisboaStop } from '../utils/operatorColors';
@@ -161,6 +161,74 @@ function SelectedStopMarker({ stop, selectedLineId }: { stop: Stop | null; selec
   return <Marker position={[lat, lon]} icon={getSelectedStopIcon(selectedLineId, stop.id)} zIndexOffset={500} />;
 }
 
+// ── Canvas-based vehicles layer (all CM buses as dots) ─
+
+const VEHICLE_RENDER_LIMIT = 800;
+
+const VehiclesCanvasLayer = memo(({ vehicles, selectedVehicleId, isDarkMap, onVehicleClick }: {
+  vehicles: Vehicle[];
+  selectedVehicleId?: string | null;
+  isDarkMap: boolean;
+  onVehicleClick?: (vehicle: Vehicle) => void;
+}) => {
+  const [bounds, setBounds] = useState<L.LatLngBounds | null>(null);
+  const [zoom, setZoom] = useState(12);
+
+  useMapEvents({
+    moveend: (e) => { setBounds(e.target.getBounds()); setZoom(e.target.getZoom()); },
+    zoomend: (e) => { setBounds(e.target.getBounds()); setZoom(e.target.getZoom()); },
+  });
+
+  const visibleVehicles = useMemo(() => {
+    if (!bounds || vehicles.length === 0) return [];
+    const results: Vehicle[] = [];
+    for (const v of vehicles) {
+      if (results.length >= VEHICLE_RENDER_LIMIT) break;
+      if (v.id === selectedVehicleId) continue; // selected vehicle rendered separately
+      const lat = Number(v.lat);
+      const lon = Number(v.lon);
+      if (!isNaN(lat) && !isNaN(lon) && bounds.contains([lat, lon])) {
+        results.push(v);
+      }
+    }
+    return results;
+  }, [vehicles, bounds, selectedVehicleId]);
+
+  // Smaller dots at low zoom, larger at high zoom
+  const radius = zoom <= 12 ? 3 : zoom <= 14 ? 4 : zoom <= 15 ? 5 : 6;
+
+  return (
+    <>
+      {visibleVehicles.map(v => {
+        const lat = Number(v.lat);
+        const lon = Number(v.lon);
+        const color = getOperatorColor(v.line_id);
+        return (
+          <CircleMarker
+            key={v.id}
+            center={[lat, lon]}
+            radius={radius}
+            pathOptions={{
+              fillColor: color,
+              fillOpacity: 0.85,
+              color: isDarkMap ? '#0d1117' : '#1A1A1A',
+              weight: 1,
+            }}
+            eventHandlers={{ click: () => onVehicleClick?.(v) }}
+          >
+            {zoom >= 14 && (
+              <Popup closeButton={false}>
+                <div className="text-center font-bold text-sm">Linha {v.line_id}</div>
+                <div className="text-xs opacity-75 text-center mt-1">{Math.round(v.speed * 3.6)} km/h</div>
+              </Popup>
+            )}
+          </CircleMarker>
+        );
+      })}
+    </>
+  );
+});
+
 // ── Canvas-based stops layer ──────────────────────────
 
 const STOP_RENDER_LIMIT = 500;
@@ -234,6 +302,7 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap, selectedLineId 
 
 export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedPatternId, selectedLineId, selectedStop, isDarkMap, onToggleMapTheme, isPanelOpen, isPanelExpanded }: TrackingMapProps) {
   const { stops, isLoading: isLoadingStops } = useAllStops();
+  const { vehicles: allVehicles } = useAllVehicles();
   const { vehicle } = useSingleVehicle(selectedVehicleId || null, selectedLineId, selectedPatternId);
   const mapRef = useRef<L.Map | null>(null);
   const [userFreeNav, setUserFreeNav] = useState(false);
@@ -317,6 +386,7 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
         <MapRefSetter mapRef={mapRef} />
         <DynamicTileLayer isDarkMap={isDarkMap} />
         <UserLocationLayer onLocationFound={handleUserLocationFound} />
+        <VehiclesCanvasLayer vehicles={allVehicles} selectedVehicleId={selectedVehicleId} isDarkMap={isDarkMap} />
         <StopsCanvasLayer stops={stops} onStopSelect={handleStopSelect} isDarkMap={isDarkMap} selectedLineId={selectedLineId} />
         <SelectedStopMarker stop={selectedStop || null} selectedLineId={selectedLineId} />
         {vehicle && <BusMarker vehicle={vehicle} isSelected={true} />}

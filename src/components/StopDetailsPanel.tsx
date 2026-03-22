@@ -173,11 +173,27 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
             </div>
           ) : isCarrisLisboaStop(stop.id) && sortedEtas.length === 0 ? (
             <div className="text-center py-6 bg-carris-green/5 rounded-xl border border-carris-green/10">
-              <div className="text-carris-green font-bold text-sm mb-1">Paragem Carris Lisboa</div>
-              <div className="text-gray-400 text-xs px-4">
-                Os dados em tempo real da Carris Lisboa ainda não estão disponíveis nesta app.
-                Consulte a app oficial da <a href="https://www.carris.pt" target="_blank" rel="noopener noreferrer" className="text-carris-green underline">Carris</a> para horários.
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-carris-green">
+                  <path d="M4 6 5.8 3.3a2 2 0 0 1 1.6-.8h9.2a2 2 0 0 1 1.6.8L20 6c.9 1.5 1 3.5 1 5.5v5a2 2 0 0 1-2 2h-1v-1a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v1H5a2 2 0 0 1-2-2v-5C3 9.5 3.1 7.5 4 6ZM4 11h16"/>
+                </svg>
+                <div className="text-carris-green font-bold text-sm">Paragem Carris Lisboa</div>
               </div>
+              <div className="text-gray-400 text-xs px-4 mb-3">
+                A Carris Lisboa não disponibiliza dados em tempo real publicamente.
+                Os autocarros da Carris Metropolitana (amarelos) são visíveis no mapa.
+              </div>
+              <a
+                href="https://www.carris.pt/en/travel/carreiras/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-carris-green/20 text-carris-green text-xs font-semibold rounded-lg hover:bg-carris-green/30 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+                Ver horários no site da Carris
+              </a>
             </div>
           ) : sortedEtas.length === 0 ? (
             <div className="text-center py-10 text-gray-400 bg-white/5 rounded-xl border border-white/5">

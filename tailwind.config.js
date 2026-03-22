@@ -9,6 +9,7 @@ export default {
       colors: {
         carris: {
           yellow: '#FFCC00',
+          green: '#008000',
           dark: '#121212',
           gray: '#1E1E1E',
           light: '#F5F5F5'

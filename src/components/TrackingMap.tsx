@@ -3,6 +3,7 @@ import L from 'leaflet';
 import { useStops, useSingleVehicle, usePatternShape, type Stop, type Vehicle } from '../services/api';
 import { useEffect, memo, useCallback, useState, useMemo, useRef } from 'react';
 import BusMarker from './BusMarker';
+import { getOperatorColor, isCarrisLisboa } from '../utils/operatorColors';
 
 // Fix for default Leaflet marker icons in React
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -43,15 +44,18 @@ function DynamicTileLayer({ isDarkMap }: { isDarkMap: boolean }) {
   return null;
 }
 
-const selectedStopIcon = new L.DivIcon({
-  className: 'bg-transparent',
-  html: `<div class="relative w-6 h-6 flex items-center justify-center">
-    <div class="absolute w-6 h-6 bg-[#FFCC00] opacity-30 rounded-full animate-ping"></div>
-    <div class="w-4 h-4 bg-[#FFCC00] rounded-full border-2 border-white shadow-lg"></div>
+function getSelectedStopIcon(lineId?: string | null) {
+  const color = getOperatorColor(lineId);
+  return new L.DivIcon({
+    className: 'bg-transparent',
+    html: `<div class="relative w-6 h-6 flex items-center justify-center">
+    <div class="absolute w-6 h-6 opacity-30 rounded-full animate-ping" style="background-color: ${color}"></div>
+    <div class="w-4 h-4 rounded-full border-2 border-white shadow-lg" style="background-color: ${color}"></div>
   </div>`,
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-});
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  });
+}
 
 interface TrackingMapProps {
   onStopSelect: (stop: Stop) => void;
@@ -67,11 +71,12 @@ interface TrackingMapProps {
 
 // ── Internal map components (need useMap) ──────────────
 
-function PatternShape({ selectedPatternId }: { selectedPatternId?: string | null }) {
+function PatternShape({ selectedPatternId, selectedLineId }: { selectedPatternId?: string | null; selectedLineId?: string | null }) {
   const { shape } = usePatternShape(selectedPatternId);
   if (!shape || shape.length === 0) return null;
   const positions = shape.map((coord: number[]) => [coord[1], coord[0]]) as [number, number][];
-  return <Polyline positions={positions} pathOptions={{ color: '#FFCC00', weight: 4, opacity: 0.8 }} />;
+  const color = getOperatorColor(selectedLineId);
+  return <Polyline positions={positions} pathOptions={{ color, weight: 4, opacity: 0.8 }} />;
 }
 
 function VehicleTracker({ vehicle, disabled, isPanelOpen, isPanelExpanded }: { vehicle: Vehicle | null; disabled: boolean; isPanelOpen?: boolean; isPanelExpanded?: boolean }) {
@@ -148,19 +153,19 @@ function MapRefSetter({ mapRef }: { mapRef: React.MutableRefObject<L.Map | null>
   return null;
 }
 
-function SelectedStopMarker({ stop }: { stop: Stop | null }) {
+function SelectedStopMarker({ stop, selectedLineId }: { stop: Stop | null; selectedLineId?: string | null }) {
   if (!stop) return null;
   const lat = Number(stop.lat);
   const lon = Number(stop.lon);
   if (isNaN(lat) || isNaN(lon)) return null;
-  return <Marker position={[lat, lon]} icon={selectedStopIcon} zIndexOffset={500} />;
+  return <Marker position={[lat, lon]} icon={getSelectedStopIcon(selectedLineId)} zIndexOffset={500} />;
 }
 
 // ── Canvas-based stops layer ──────────────────────────
 
 const STOP_RENDER_LIMIT = 500;
 
-const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop[], onStopSelect: (stop: Stop) => void, isDarkMap: boolean }) => {
+const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap, selectedLineId }: { stops: Stop[], onStopSelect: (stop: Stop) => void, isDarkMap: boolean, selectedLineId?: string | null }) => {
   const [bounds, setBounds] = useState<L.LatLngBounds | null>(null);
   const [zoom, setZoom] = useState(12);
 
@@ -179,6 +184,8 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop
   }, [zoom]);
 
   const borderWeight = zoom >= 16 ? 2 : 1.5;
+
+  const stopColor = getOperatorColor(selectedLineId);
 
   const visibleStops = useMemo(() => {
     if (zoom < 13 || !bounds) return [];
@@ -204,7 +211,7 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop
             key={stop.id}
             center={[lat, lon]}
             radius={markerRadius}
-            pathOptions={{ fillColor: '#FFCC00', fillOpacity: 0.9, color: isDarkMap ? '#0d1117' : '#1A1A1A', weight: borderWeight }}
+            pathOptions={{ fillColor: stopColor, fillOpacity: 0.9, color: isDarkMap ? '#0d1117' : '#1A1A1A', weight: borderWeight }}
             eventHandlers={{ click: () => onStopSelect(stop) }}
           >
             <Popup closeButton={false}>
@@ -305,10 +312,10 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
         <MapRefSetter mapRef={mapRef} />
         <DynamicTileLayer isDarkMap={isDarkMap} />
         <UserLocationLayer onLocationFound={handleUserLocationFound} />
-        <StopsCanvasLayer stops={stops} onStopSelect={handleStopSelect} isDarkMap={isDarkMap} />
-        <SelectedStopMarker stop={selectedStop || null} />
+        <StopsCanvasLayer stops={stops} onStopSelect={handleStopSelect} isDarkMap={isDarkMap} selectedLineId={selectedLineId} />
+        <SelectedStopMarker stop={selectedStop || null} selectedLineId={selectedLineId} />
         {vehicle && <BusMarker vehicle={vehicle} isSelected={true} />}
-        <PatternShape selectedPatternId={selectedPatternId} />
+        <PatternShape selectedPatternId={selectedPatternId} selectedLineId={selectedLineId} />
         <VehicleTracker vehicle={vehicle} disabled={userFreeNav} isPanelOpen={isPanelOpen} isPanelExpanded={isPanelExpanded} />
       </MapContainer>
 
@@ -353,7 +360,9 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
         {/* Back to selected stop */}
         {selectedStop && (
           <button
-            className="pointer-events-auto w-11 h-11 bg-carris-yellow text-carris-dark rounded-full shadow-lg border border-white/20 flex items-center justify-center hover:brightness-110 active:scale-95 transition-all"
+            className={`pointer-events-auto w-11 h-11 rounded-full shadow-lg border border-white/20 flex items-center justify-center hover:brightness-110 active:scale-95 transition-all ${
+              isCarrisLisboa(selectedLineId) ? 'bg-carris-green text-white' : 'bg-carris-yellow text-carris-dark'
+            }`}
             onClick={handleBackToStop}
             title="Voltar à minha paragem"
           >

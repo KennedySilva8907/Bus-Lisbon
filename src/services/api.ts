@@ -55,7 +55,7 @@ export function useStops() {
     dedupingInterval: 3600000,
     keepPreviousData: true,
   });
-  
+
   return {
     stops: data || [],
     isLoading,
@@ -63,8 +63,24 @@ export function useStops() {
   };
 }
 
-// ── Single Vehicle (only fetches when vehicleId is set) ─
-// Uses the LIGHTER v1 endpoint (~400KB vs 1.2MB from v2)
+// ── All Vehicles (fetched every 10s, always active) ─────
+
+export function useAllVehicles() {
+  const { data, error, isLoading } = useSWR<Vehicle[]>(
+    `${API_BASE_URL}/v2/vehicles`,
+    fetcher,
+    {
+      refreshInterval: 10000,
+      revalidateOnFocus: false,
+      dedupingInterval: 8000,
+      keepPreviousData: true,
+    }
+  );
+
+  return { vehicles: data || [], isLoading, isError: error };
+}
+
+// ── Single Vehicle (finds from all vehicles data) ───────
 
 export function useSingleVehicle(vehicleId: string | null, lineId?: string | null, patternId?: string | null) {
   const shouldFetch = !!(vehicleId || lineId);
@@ -93,16 +109,18 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
 // ── ETAs ───────────────────────────────────────────────
 
 export function useStopETA(stopId: string | null) {
+  // Don't try to fetch ETAs for Carris Lisboa stops (they use CL_ prefix)
+  const isClStop = stopId?.startsWith('CL_');
   const { data, error, isLoading } = useSWR<ETA[]>(
-    stopId ? `${API_BASE_URL}/stops/${stopId}/realtime` : null, 
+    stopId && !isClStop ? `${API_BASE_URL}/stops/${stopId}/realtime` : null,
     fetcher,
-    { 
+    {
       refreshInterval: 8000,
       revalidateOnFocus: false,
       keepPreviousData: true,
     }
   );
-  
+
   return { etas: data || [], isLoading, isError: error };
 }
 
@@ -119,43 +137,71 @@ async function fetchCarrisLisboaStops(): Promise<Stop[]> {
     if (cached) {
       const { data, ts } = JSON.parse(cached);
       if (Date.now() - ts < CL_CACHE_TTL && Array.isArray(data) && data.length > 0) {
+        console.log(`[CL] Loaded ${data.length} stops from cache`);
         return data;
       }
     }
   } catch { /* ignore cache errors */ }
 
-  // Also try bundled static file as fallback
+  // Try bundled static file
   try {
     const staticRes = await fetch('/data/carris-lisboa-stops.json');
     if (staticRes.ok) {
-      const staticData = await staticRes.json();
-      if (Array.isArray(staticData) && staticData.length > 0) {
-        return staticData;
+      const text = await staticRes.text();
+      if (text.trim().length > 10) {
+        const staticData = JSON.parse(text);
+        if (Array.isArray(staticData) && staticData.length > 0) {
+          console.log(`[CL] Loaded ${staticData.length} stops from static JSON`);
+          // Also save to cache for next time
+          try { localStorage.setItem(CL_CACHE_KEY, JSON.stringify({ data: staticData, ts: Date.now() })); } catch {}
+          return staticData;
+        }
       }
     }
   } catch { /* continue to GTFS fetch */ }
 
-  // Fetch GTFS zip and parse stops.txt
-  try {
-    const JSZip = (await import('jszip')).default;
-    const res = await fetch(CARRIS_GTFS_URL);
-    if (!res.ok) return [];
-    const zipData = await res.arrayBuffer();
-    const zip = await JSZip.loadAsync(zipData);
-    const stopsFile = zip.file('stops.txt');
-    if (!stopsFile) return [];
-    const stopsCSV = await stopsFile.async('string');
-    const stops = parseStopsCSV(stopsCSV);
-
-    // Cache in localStorage
+  // Fetch GTFS zip and parse stops.txt (with retry)
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      localStorage.setItem(CL_CACHE_KEY, JSON.stringify({ data: stops, ts: Date.now() }));
-    } catch { /* storage full, ignore */ }
+      console.log(`[CL] Fetching GTFS zip (attempt ${attempt + 1})...`);
+      const JSZip = (await import('jszip')).default;
+      const res = await fetch(CARRIS_GTFS_URL);
+      if (!res.ok) {
+        console.warn(`[CL] GTFS fetch failed: HTTP ${res.status}`);
+        continue;
+      }
+      const zipData = await res.arrayBuffer();
+      const zip = await JSZip.loadAsync(zipData);
 
-    return stops;
-  } catch {
-    return [];
+      // Try both possible locations: root or inside a folder
+      let stopsFile = zip.file('stops.txt');
+      if (!stopsFile) {
+        // Some GTFS zips have files inside a subdirectory
+        const files = Object.keys(zip.files);
+        const stopsPath = files.find(f => f.endsWith('stops.txt'));
+        if (stopsPath) stopsFile = zip.file(stopsPath);
+      }
+      if (!stopsFile) {
+        console.warn('[CL] stops.txt not found in GTFS zip');
+        return [];
+      }
+
+      const stopsCSV = await stopsFile.async('string');
+      const stops = parseStopsCSV(stopsCSV);
+      console.log(`[CL] Parsed ${stops.length} stops from GTFS`);
+
+      if (stops.length > 0) {
+        try { localStorage.setItem(CL_CACHE_KEY, JSON.stringify({ data: stops, ts: Date.now() })); } catch {}
+      }
+
+      return stops;
+    } catch (err) {
+      console.warn(`[CL] GTFS parse error (attempt ${attempt + 1}):`, err);
+      if (attempt < 1) await new Promise(r => setTimeout(r, 2000));
+    }
   }
+
+  return [];
 }
 
 function parseStopsCSV(csv: string): Stop[] {

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { useStops, type Stop } from '../services/api';
+import { useAllStops, type Stop } from '../services/api';
 import { Star } from 'lucide-react';
+import { isCarrisLisboaStop } from '../utils/operatorColors';
 
 interface SearchBarProps {
   onStopSelect: (stop: Stop) => void;
@@ -8,7 +9,7 @@ interface SearchBarProps {
 }
 
 export default function SearchBar({ onStopSelect, favorites = [] }: SearchBarProps) {
-  const { stops } = useStops();
+  const { stops } = useAllStops();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -108,8 +109,10 @@ export default function SearchBar({ onStopSelect, favorites = [] }: SearchBarPro
                   <span className="text-xs text-gray-400">{stop.locality || 'Unknown'}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Star size={12} className="text-carris-yellow" fill="currentColor" />
-                  <div className="bg-carris-dark text-carris-yellow text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider">
+                  <Star size={12} className={isCarrisLisboaStop(stop.id) ? 'text-carris-green' : 'text-carris-yellow'} fill="currentColor" />
+                  <div className={`bg-carris-dark text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider ${
+                    isCarrisLisboaStop(stop.id) ? 'text-carris-green' : 'text-carris-yellow'
+                  }`}>
                     #{stop.id}
                   </div>
                 </div>
@@ -136,9 +139,13 @@ export default function SearchBar({ onStopSelect, favorites = [] }: SearchBarPro
               >
                 <div className="flex flex-col">
                   <span className="font-semibold text-carris-light max-w-[200px] truncate">{stop.name}</span>
-                  <span className="text-xs text-gray-400">{stop.locality || 'Unknown'}</span>
+                  <span className="text-xs text-gray-400">
+                    {stop.operator === 'carris_lisboa' ? 'Carris Lisboa' : (stop.locality || 'Unknown')}
+                  </span>
                 </div>
-                <div className="bg-carris-dark text-carris-yellow text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider">
+                <div className={`bg-carris-dark text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider ${
+                  isCarrisLisboaStop(stop.id) ? 'text-carris-green' : 'text-carris-yellow'
+                }`}>
                   #{stop.id}
                 </div>
               </li>

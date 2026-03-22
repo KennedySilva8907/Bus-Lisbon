@@ -3,6 +3,7 @@ import { fromUnixTime } from 'date-fns';
 import { X, Star } from 'lucide-react';
 import { useRef, useEffect } from 'react';
 import { recordDeviation } from '../services/history';
+import { isCarrisLisboa } from '../utils/operatorColors';
 
 interface StopDetailsPanelProps {
   stop: Stop | null;
@@ -11,12 +12,13 @@ interface StopDetailsPanelProps {
   onToggleExpand: () => void;
   selectedVehicleId?: string | null;
   selectedPatternId?: string | null;
+  selectedLineId?: string | null;
   onVehicleSelect?: (vehicleId: string | null, patternId?: string, lineId?: string) => void;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
 }
 
-export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleExpand, selectedVehicleId, selectedPatternId, onVehicleSelect, isFavorite, onToggleFavorite }: StopDetailsPanelProps) {
+export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleExpand, selectedVehicleId, selectedPatternId, selectedLineId, onVehicleSelect, isFavorite, onToggleFavorite }: StopDetailsPanelProps) {
   const { etas, isLoading } = useStopETA(stop?.id || null);
   const panelRef = useRef<HTMLElement>(null);
   const touchRef = useRef({ startY: 0, isDragging: false, isOnHandle: false });
@@ -90,6 +92,9 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
     }
   };
 
+  // Determine header color based on selected line
+  const headerIsLisboa = isCarrisLisboa(selectedLineId);
+
   return (
     <aside
       ref={panelRef}
@@ -120,8 +125,12 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
         >
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-bold tracking-tight text-carris-light leading-tight truncate">{stop.name}</h2>
-            <div className="text-carris-yellow text-xs font-medium mt-0.5 flex items-center gap-2">
-              <span className="bg-carris-yellow/10 px-1.5 py-0.5 rounded text-[11px] text-carris-yellow border border-carris-yellow/20">
+            <div className={`text-xs font-medium mt-0.5 flex items-center gap-2 ${headerIsLisboa ? 'text-carris-green' : 'text-carris-yellow'}`}>
+              <span className={`px-1.5 py-0.5 rounded text-[11px] border ${
+                headerIsLisboa
+                  ? 'bg-carris-green/10 text-carris-green border-carris-green/20'
+                  : 'bg-carris-yellow/10 text-carris-yellow border-carris-yellow/20'
+              }`}>
                 #{stop.id}
               </span>
               {stop.locality && <span className="opacity-70 text-gray-300 text-[12px] truncate">{stop.locality}</span>}
@@ -132,7 +141,11 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
             {onToggleFavorite && (
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-                className={`p-2 rounded-full transition-colors ${isFavorite ? 'bg-carris-yellow/20 text-carris-yellow' : 'bg-white/5 hover:bg-white/10 text-gray-400'}`}
+                className={`p-2 rounded-full transition-colors ${
+                  isFavorite
+                    ? (headerIsLisboa ? 'bg-carris-green/20 text-carris-green' : 'bg-carris-yellow/20 text-carris-yellow')
+                    : 'bg-white/5 hover:bg-white/10 text-gray-400'
+                }`}
                 aria-label={isFavorite ? 'Remover favorito' : 'Adicionar favorito'}
               >
                 <Star size={16} fill={isFavorite ? 'currentColor' : 'none'} />
@@ -174,6 +187,8 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                 ? selectedVehicleId === eta.vehicle_id
                 : !selectedVehicleId && selectedPatternId === eta.pattern_id;
 
+              const lisboa = isCarrisLisboa(eta.line_id);
+
               // Direction / punctuality indicator (works for both tracked and estimated)
               let directionLabel = '';
               let directionColor = 'text-gray-400';
@@ -210,6 +225,19 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                 displayTime = `${hours}h${mins > 0 ? String(mins).padStart(2, '0') : ''}`;
               }
 
+              // Per-line operator color classes
+              const badgeClasses = isSelected || isTracked
+                ? (lisboa ? 'bg-carris-green text-carris-dark' : 'bg-carris-yellow text-carris-dark')
+                : (lisboa ? 'bg-carris-green/30 text-carris-green/80' : 'bg-carris-yellow/30 text-carris-yellow/80');
+
+              const selectedRowClasses = isSelected
+                ? (lisboa
+                    ? 'bg-carris-green/10 border-carris-green/40 ring-1 ring-carris-green/30'
+                    : 'bg-carris-yellow/10 border-carris-yellow/40 ring-1 ring-carris-yellow/30')
+                : isTracked
+                  ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/5'
+                  : 'bg-white/[0.02] hover:bg-white/[0.05] border-white/[0.03]';
+
               return (
                 <div
                   key={`${eta.vehicle_id || eta.line_id}-${i}`}
@@ -218,23 +246,11 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                       onVehicleSelect(eta.vehicle_id || null, eta.pattern_id, eta.line_id);
                     }
                   }}
-                  className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer active:scale-[0.98] ${
-                    isSelected
-                      ? 'bg-carris-yellow/10 border-carris-yellow/40 ring-1 ring-carris-yellow/30'
-                      : isTracked
-                        ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/5'
-                        : 'bg-white/[0.02] hover:bg-white/[0.05] border-white/[0.03]'
-                  }`}
+                  className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer active:scale-[0.98] ${selectedRowClasses}`}
                 >
                   {/* Line badge */}
                   <div className="flex-shrink-0 w-14 text-center">
-                    <div className={`font-black text-sm px-2 py-1.5 rounded-lg ${
-                      isSelected
-                        ? 'bg-carris-yellow text-carris-dark'
-                        : isTracked
-                          ? 'bg-carris-yellow text-carris-dark'
-                          : 'bg-carris-yellow/30 text-carris-yellow/80'
-                    }`}>
+                    <div className={`font-black text-sm px-2 py-1.5 rounded-lg ${badgeClasses}`}>
                       {eta.line_id}
                     </div>
                   </div>
@@ -250,8 +266,8 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                         </>
                       ) : hasEstimate ? (
                         <>
-                          <span className="inline-block w-1.5 h-1.5 bg-carris-yellow rounded-full flex-shrink-0"></span>
-                          <span className="text-[11px] text-carris-yellow/70 truncate">Previsto</span>
+                          <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${lisboa ? 'bg-carris-green' : 'bg-carris-yellow'}`}></span>
+                          <span className={`text-[11px] truncate ${lisboa ? 'text-carris-green/70' : 'text-carris-yellow/70'}`}>Previsto</span>
                         </>
                       ) : (
                         <>
@@ -272,7 +288,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                     <div className={`font-bold text-[15px] leading-tight ${
                       isPast ? 'text-gray-500'
                       : diffMinutes <= 3 && isTracked ? 'text-green-400 animate-pulse'
-                      : diffMinutes <= 10 ? 'text-carris-yellow'
+                      : diffMinutes <= 10 ? (lisboa ? 'text-carris-green' : 'text-carris-yellow')
                       : !isTracked ? 'text-gray-300'
                       : 'text-white'
                     }`}>

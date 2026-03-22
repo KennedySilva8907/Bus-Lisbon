@@ -64,6 +64,7 @@ function App() {
           onClose={() => { setSelectedStop(null); setSelectedVehicleId(null); setSelectedPatternId(null); setSelectedLineId(null); }}
           selectedVehicleId={selectedVehicleId}
           selectedPatternId={selectedPatternId}
+          selectedLineId={selectedLineId}
           onVehicleSelect={(vid, pid, lid) => { setSelectedVehicleId(vid); setSelectedPatternId(pid || null); setSelectedLineId(lid || null); }}
           isFavorite={selectedStop ? isFavorite(selectedStop.id) : false}
           onToggleFavorite={() => selectedStop && toggleFavorite(selectedStop.id)}

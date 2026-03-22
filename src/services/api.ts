@@ -1,5 +1,4 @@
 import useSWR from 'swr';
-import { useMemo } from 'react';
 
 const API_BASE_URL = 'https://api.carrismetropolitana.pt';
 
@@ -21,7 +20,6 @@ export interface Stop {
   lon: string | number;
   locality?: string;
   municipality_name?: string;
-  operator?: 'carris_metropolitana' | 'carris_lisboa';
 }
 
 export interface Vehicle {
@@ -55,7 +53,7 @@ export function useStops() {
     dedupingInterval: 3600000,
     keepPreviousData: true,
   });
-
+  
   return {
     stops: data || [],
     isLoading,
@@ -63,24 +61,8 @@ export function useStops() {
   };
 }
 
-// ── All Vehicles (fetched every 10s, always active) ─────
-
-export function useAllVehicles() {
-  const { data, error, isLoading } = useSWR<Vehicle[]>(
-    `${API_BASE_URL}/v2/vehicles`,
-    fetcher,
-    {
-      refreshInterval: 10000,
-      revalidateOnFocus: false,
-      dedupingInterval: 8000,
-      keepPreviousData: true,
-    }
-  );
-
-  return { vehicles: data || [], isLoading, isError: error };
-}
-
-// ── Single Vehicle (finds from all vehicles data) ───────
+// ── Single Vehicle (only fetches when vehicleId is set) ─
+// Uses the LIGHTER v1 endpoint (~400KB vs 1.2MB from v2)
 
 export function useSingleVehicle(vehicleId: string | null, lineId?: string | null, patternId?: string | null) {
   const shouldFetch = !!(vehicleId || lineId);
@@ -109,180 +91,17 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
 // ── ETAs ───────────────────────────────────────────────
 
 export function useStopETA(stopId: string | null) {
-  // Don't try to fetch ETAs for Carris Lisboa stops (they use CL_ prefix)
-  const isClStop = stopId?.startsWith('CL_');
   const { data, error, isLoading } = useSWR<ETA[]>(
-    stopId && !isClStop ? `${API_BASE_URL}/stops/${stopId}/realtime` : null,
+    stopId ? `${API_BASE_URL}/stops/${stopId}/realtime` : null, 
     fetcher,
-    {
+    { 
       refreshInterval: 8000,
       revalidateOnFocus: false,
       keepPreviousData: true,
     }
   );
-
+  
   return { etas: data || [], isLoading, isError: error };
-}
-
-// ── Carris Lisboa Stops (fetched from GTFS at runtime) ──
-
-const CARRIS_GTFS_URL = 'https://gateway.carris.pt/gateway/gtfs/api/v2.11/GTFS';
-const CL_CACHE_KEY = 'bdt-carris-lisboa-stops';
-const CL_CACHE_TTL = 7 * 24 * 3600 * 1000; // 7 days
-
-async function fetchCarrisLisboaStops(): Promise<Stop[]> {
-  // Check localStorage cache first
-  try {
-    const cached = localStorage.getItem(CL_CACHE_KEY);
-    if (cached) {
-      const { data, ts } = JSON.parse(cached);
-      if (Date.now() - ts < CL_CACHE_TTL && Array.isArray(data) && data.length > 0) {
-        console.log(`[CL] Loaded ${data.length} stops from cache`);
-        return data;
-      }
-    }
-  } catch { /* ignore cache errors */ }
-
-  // Try bundled static file
-  try {
-    const staticRes = await fetch('/data/carris-lisboa-stops.json');
-    if (staticRes.ok) {
-      const text = await staticRes.text();
-      if (text.trim().length > 10) {
-        const staticData = JSON.parse(text);
-        if (Array.isArray(staticData) && staticData.length > 0) {
-          console.log(`[CL] Loaded ${staticData.length} stops from static JSON`);
-          // Also save to cache for next time
-          try { localStorage.setItem(CL_CACHE_KEY, JSON.stringify({ data: staticData, ts: Date.now() })); } catch {}
-          return staticData;
-        }
-      }
-    }
-  } catch { /* continue to GTFS fetch */ }
-
-  // Fetch GTFS zip and parse stops.txt (with retry)
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      console.log(`[CL] Fetching GTFS zip (attempt ${attempt + 1})...`);
-      const JSZip = (await import('jszip')).default;
-      const res = await fetch(CARRIS_GTFS_URL);
-      if (!res.ok) {
-        console.warn(`[CL] GTFS fetch failed: HTTP ${res.status}`);
-        continue;
-      }
-      const zipData = await res.arrayBuffer();
-      const zip = await JSZip.loadAsync(zipData);
-
-      // Try both possible locations: root or inside a folder
-      let stopsFile = zip.file('stops.txt');
-      if (!stopsFile) {
-        // Some GTFS zips have files inside a subdirectory
-        const files = Object.keys(zip.files);
-        const stopsPath = files.find(f => f.endsWith('stops.txt'));
-        if (stopsPath) stopsFile = zip.file(stopsPath);
-      }
-      if (!stopsFile) {
-        console.warn('[CL] stops.txt not found in GTFS zip');
-        return [];
-      }
-
-      const stopsCSV = await stopsFile.async('string');
-      const stops = parseStopsCSV(stopsCSV);
-      console.log(`[CL] Parsed ${stops.length} stops from GTFS`);
-
-      if (stops.length > 0) {
-        try { localStorage.setItem(CL_CACHE_KEY, JSON.stringify({ data: stops, ts: Date.now() })); } catch {}
-      }
-
-      return stops;
-    } catch (err) {
-      console.warn(`[CL] GTFS parse error (attempt ${attempt + 1}):`, err);
-      if (attempt < 1) await new Promise(r => setTimeout(r, 2000));
-    }
-  }
-
-  return [];
-}
-
-function parseStopsCSV(csv: string): Stop[] {
-  const lines = csv.trim().split('\n');
-  if (lines.length < 2) return [];
-  const header = lines[0].replace(/^\uFEFF/, '').split(',').map(h => h.trim().replace(/"/g, ''));
-  const idIdx = header.indexOf('stop_id');
-  const nameIdx = header.indexOf('stop_name');
-  const latIdx = header.indexOf('stop_lat');
-  const lonIdx = header.indexOf('stop_lon');
-  if (idIdx < 0 || nameIdx < 0 || latIdx < 0 || lonIdx < 0) return [];
-
-  const stops: Stop[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const vals = parseCSVLine(lines[i]);
-    const lat = parseFloat(vals[latIdx]);
-    const lon = parseFloat(vals[lonIdx]);
-    if (isNaN(lat) || isNaN(lon)) continue;
-    stops.push({
-      id: `CL_${(vals[idIdx] || '').replace(/"/g, '')}`,
-      name: (vals[nameIdx] || '').replace(/"/g, ''),
-      lat,
-      lon,
-      operator: 'carris_lisboa',
-    });
-  }
-  return stops;
-}
-
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  for (const char of line) {
-    if (char === '"') { inQuotes = !inQuotes; }
-    else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
-    else { current += char; }
-  }
-  result.push(current);
-  return result;
-}
-
-export function useCarrisLisboaStops() {
-  const { data, error, isLoading } = useSWR<Stop[]>(
-    'carris-lisboa-stops',
-    fetchCarrisLisboaStops,
-    {
-      revalidateOnFocus: false,
-      revalidateIfStale: false,
-      revalidateOnReconnect: false,
-      dedupingInterval: 86400000,
-      keepPreviousData: true,
-    }
-  );
-
-  return {
-    stops: data || [],
-    isLoading,
-    isError: error,
-  };
-}
-
-// ── Combined stops from both operators ────────────────
-
-export function useAllStops() {
-  const { stops: cmStops, isLoading: cmLoading } = useStops();
-  const { stops: clStops, isLoading: clLoading } = useCarrisLisboaStops();
-
-  const allStops = useMemo(() => {
-    if (cmStops.length === 0 && clStops.length === 0) return [];
-    const tagged: Stop[] = [
-      ...cmStops.map(s => ({ ...s, operator: 'carris_metropolitana' as const })),
-      ...clStops.map(s => ({ ...s, operator: 'carris_lisboa' as const })),
-    ];
-    return tagged;
-  }, [cmStops, clStops]);
-
-  return {
-    stops: allStops,
-    isLoading: cmLoading || clLoading,
-  };
 }
 
 // ── Pattern Shape (cached indefinitely) ────────────────

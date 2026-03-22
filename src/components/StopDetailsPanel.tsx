@@ -3,7 +3,7 @@ import { fromUnixTime } from 'date-fns';
 import { X, Star } from 'lucide-react';
 import { useRef, useEffect } from 'react';
 import { recordDeviation } from '../services/history';
-import { isCarrisLisboa } from '../utils/operatorColors';
+import { isCarrisLisboa, isCarrisLisboaStop } from '../utils/operatorColors';
 
 interface StopDetailsPanelProps {
   stop: Stop | null;
@@ -92,8 +92,8 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
     }
   };
 
-  // Determine header color based on selected line
-  const headerIsLisboa = isCarrisLisboa(selectedLineId);
+  // Determine header color based on selected line or stop operator
+  const headerIsLisboa = isCarrisLisboa(selectedLineId) || isCarrisLisboaStop(stop.id);
 
   return (
     <aside
@@ -167,9 +167,17 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
             Próximas Chegadas
           </h3>
 
-          {isLoading ? (
+          {isLoading && !isCarrisLisboaStop(stop.id) ? (
             <div className="flex justify-center items-center py-10 opacity-50">
-               <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-carris-yellow"></div>
+               <div className={`animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 ${headerIsLisboa ? 'border-carris-green' : 'border-carris-yellow'}`}></div>
+            </div>
+          ) : isCarrisLisboaStop(stop.id) && sortedEtas.length === 0 ? (
+            <div className="text-center py-6 bg-carris-green/5 rounded-xl border border-carris-green/10">
+              <div className="text-carris-green font-bold text-sm mb-1">Paragem Carris Lisboa</div>
+              <div className="text-gray-400 text-xs px-4">
+                Os dados em tempo real da Carris Lisboa ainda não estão disponíveis nesta app.
+                Consulte a app oficial da <a href="https://www.carris.pt" target="_blank" rel="noopener noreferrer" className="text-carris-green underline">Carris</a> para horários.
+              </div>
             </div>
           ) : sortedEtas.length === 0 ? (
             <div className="text-center py-10 text-gray-400 bg-white/5 rounded-xl border border-white/5">

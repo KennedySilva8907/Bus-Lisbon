@@ -1,9 +1,9 @@
 import { MapContainer, useMap, Polyline, CircleMarker, Marker, Popup, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { useStops, useSingleVehicle, usePatternShape, type Stop, type Vehicle } from '../services/api';
+import { useAllStops, useSingleVehicle, usePatternShape, type Stop, type Vehicle } from '../services/api';
 import { useEffect, memo, useCallback, useState, useMemo, useRef } from 'react';
 import BusMarker from './BusMarker';
-import { getOperatorColor, isCarrisLisboa } from '../utils/operatorColors';
+import { getOperatorColor, getStopOperatorColor, isCarrisLisboa, isCarrisLisboaStop } from '../utils/operatorColors';
 
 // Fix for default Leaflet marker icons in React
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -44,8 +44,8 @@ function DynamicTileLayer({ isDarkMap }: { isDarkMap: boolean }) {
   return null;
 }
 
-function getSelectedStopIcon(lineId?: string | null) {
-  const color = getOperatorColor(lineId);
+function getSelectedStopIcon(lineId?: string | null, stopId?: string | null) {
+  const color = getStopOperatorColor(stopId, lineId);
   return new L.DivIcon({
     className: 'bg-transparent',
     html: `<div class="relative w-6 h-6 flex items-center justify-center">
@@ -158,7 +158,7 @@ function SelectedStopMarker({ stop, selectedLineId }: { stop: Stop | null; selec
   const lat = Number(stop.lat);
   const lon = Number(stop.lon);
   if (isNaN(lat) || isNaN(lon)) return null;
-  return <Marker position={[lat, lon]} icon={getSelectedStopIcon(selectedLineId)} zIndexOffset={500} />;
+  return <Marker position={[lat, lon]} icon={getSelectedStopIcon(selectedLineId, stop.id)} zIndexOffset={500} />;
 }
 
 // ── Canvas-based stops layer ──────────────────────────
@@ -185,8 +185,6 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap, selectedLineId 
 
   const borderWeight = zoom >= 16 ? 2 : 1.5;
 
-  const stopColor = getOperatorColor(selectedLineId);
-
   const visibleStops = useMemo(() => {
     if (zoom < 13 || !bounds) return [];
     const results: Stop[] = [];
@@ -206,6 +204,10 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap, selectedLineId 
       {visibleStops.map(stop => {
         const lat = Number(stop.lat);
         const lon = Number(stop.lon);
+        // Color each stop based on its operator (CL stops are green, CM stops use selected line color or yellow)
+        const stopColor = isCarrisLisboaStop(stop.id) || stop.operator === 'carris_lisboa'
+          ? getStopOperatorColor(stop.id)
+          : getOperatorColor(selectedLineId);
         return (
           <CircleMarker
             key={stop.id}
@@ -217,6 +219,9 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap, selectedLineId 
             <Popup closeButton={false}>
               <div className="text-center font-bold text-sm">{stop.name}</div>
               <div className="text-xs opacity-75 text-center mt-1">{stop.id}</div>
+              {stop.operator === 'carris_lisboa' && (
+                <div className="text-xs text-green-600 font-semibold text-center mt-1">Carris Lisboa</div>
+              )}
             </Popup>
           </CircleMarker>
         );
@@ -228,7 +233,7 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap, selectedLineId 
 // ── Main Component ────────────────────────────────────
 
 export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedPatternId, selectedLineId, selectedStop, isDarkMap, onToggleMapTheme, isPanelOpen, isPanelExpanded }: TrackingMapProps) {
-  const { stops, isLoading: isLoadingStops } = useStops();
+  const { stops, isLoading: isLoadingStops } = useAllStops();
   const { vehicle } = useSingleVehicle(selectedVehicleId || null, selectedLineId, selectedPatternId);
   const mapRef = useRef<L.Map | null>(null);
   const [userFreeNav, setUserFreeNav] = useState(false);
@@ -361,7 +366,7 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
         {selectedStop && (
           <button
             className={`pointer-events-auto w-11 h-11 rounded-full shadow-lg border border-white/20 flex items-center justify-center hover:brightness-110 active:scale-95 transition-all ${
-              isCarrisLisboa(selectedLineId) ? 'bg-carris-green text-white' : 'bg-carris-yellow text-carris-dark'
+              isCarrisLisboa(selectedLineId) || isCarrisLisboaStop(selectedStop?.id) ? 'bg-carris-green text-white' : 'bg-carris-yellow text-carris-dark'
             }`}
             onClick={handleBackToStop}
             title="Voltar à minha paragem"

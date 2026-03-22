@@ -1,4 +1,5 @@
 import useSWR from 'swr';
+import { useMemo } from 'react';
 
 const API_BASE_URL = 'https://api.carrismetropolitana.pt';
 
@@ -20,6 +21,7 @@ export interface Stop {
   lon: string | number;
   locality?: string;
   municipality_name?: string;
+  operator?: 'carris_metropolitana' | 'carris_lisboa';
 }
 
 export interface Vehicle {
@@ -102,6 +104,60 @@ export function useStopETA(stopId: string | null) {
   );
   
   return { etas: data || [], isLoading, isError: error };
+}
+
+// ── Carris Lisboa Stops (from bundled GTFS data) ──────
+
+const clStopsFetcher = async (url: string) => {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+};
+
+export function useCarrisLisboaStops() {
+  const { data, error, isLoading } = useSWR<Stop[]>(
+    '/data/carris-lisboa-stops.json',
+    clStopsFetcher,
+    {
+      revalidateOnFocus: false,
+      revalidateIfStale: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 86400000, // 24h cache
+      keepPreviousData: true,
+    }
+  );
+
+  return {
+    stops: data || [],
+    isLoading,
+    isError: error,
+  };
+}
+
+// ── Combined stops from both operators ────────────────
+
+export function useAllStops() {
+  const { stops: cmStops, isLoading: cmLoading } = useStops();
+  const { stops: clStops, isLoading: clLoading } = useCarrisLisboaStops();
+
+  const allStops = useMemo(() => {
+    if (cmStops.length === 0 && clStops.length === 0) return [];
+    const tagged: Stop[] = [
+      ...cmStops.map(s => ({ ...s, operator: 'carris_metropolitana' as const })),
+      ...clStops.map(s => ({ ...s, operator: 'carris_lisboa' as const })),
+    ];
+    return tagged;
+  }, [cmStops, clStops]);
+
+  return {
+    stops: allStops,
+    isLoading: cmLoading || clLoading,
+  };
 }
 
 // ── Pattern Shape (cached indefinitely) ────────────────

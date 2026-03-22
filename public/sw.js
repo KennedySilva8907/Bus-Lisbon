@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bdt-cache-v2';
+const CACHE_NAME = 'bdt-cache-v1';
 const STOPS_URL = 'https://api.carrismetropolitana.pt/stops';
 
 // Pre-cache stops data on install
@@ -38,13 +38,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Vehicles endpoint: always fetch from network (realtime data)
-  if (url.includes('/v2/vehicles')) {
-    return; // Let the browser handle it normally (no caching for realtime)
-  }
-
   // Map tiles: cache-first (they rarely change)
-  if (url.includes('basemaps.cartocdn.com') || url.includes('mt1.google.com') || url.includes('mt2.google.com') || url.includes('mt3.google.com')) {
+  if (url.includes('basemaps.cartocdn.com')) {
     event.respondWith(
       caches.match(event.request).then(cached => {
         if (cached) return cached;

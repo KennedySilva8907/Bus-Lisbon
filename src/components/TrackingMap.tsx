@@ -1,9 +1,8 @@
 import { MapContainer, useMap, Polyline, CircleMarker, Marker, Popup, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { useAllStops, useAllVehicles, useSingleVehicle, usePatternShape, type Stop, type Vehicle } from '../services/api';
+import { useStops, useSingleVehicle, usePatternShape, type Stop, type Vehicle } from '../services/api';
 import { useEffect, memo, useCallback, useState, useMemo, useRef } from 'react';
 import BusMarker from './BusMarker';
-import { getOperatorColor, getStopOperatorColor, isCarrisLisboa, isCarrisLisboaStop } from '../utils/operatorColors';
 
 // Fix for default Leaflet marker icons in React
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -44,18 +43,15 @@ function DynamicTileLayer({ isDarkMap }: { isDarkMap: boolean }) {
   return null;
 }
 
-function getSelectedStopIcon(lineId?: string | null, stopId?: string | null) {
-  const color = getStopOperatorColor(stopId, lineId);
-  return new L.DivIcon({
-    className: 'bg-transparent',
-    html: `<div class="relative w-6 h-6 flex items-center justify-center">
-    <div class="absolute w-6 h-6 opacity-30 rounded-full animate-ping" style="background-color: ${color}"></div>
-    <div class="w-4 h-4 rounded-full border-2 border-white shadow-lg" style="background-color: ${color}"></div>
+const selectedStopIcon = new L.DivIcon({
+  className: 'bg-transparent',
+  html: `<div class="relative w-6 h-6 flex items-center justify-center">
+    <div class="absolute w-6 h-6 bg-[#FFCC00] opacity-30 rounded-full animate-ping"></div>
+    <div class="w-4 h-4 bg-[#FFCC00] rounded-full border-2 border-white shadow-lg"></div>
   </div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-  });
-}
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+});
 
 interface TrackingMapProps {
   onStopSelect: (stop: Stop) => void;
@@ -71,12 +67,11 @@ interface TrackingMapProps {
 
 // ── Internal map components (need useMap) ──────────────
 
-function PatternShape({ selectedPatternId, selectedLineId }: { selectedPatternId?: string | null; selectedLineId?: string | null }) {
+function PatternShape({ selectedPatternId }: { selectedPatternId?: string | null }) {
   const { shape } = usePatternShape(selectedPatternId);
   if (!shape || shape.length === 0) return null;
   const positions = shape.map((coord: number[]) => [coord[1], coord[0]]) as [number, number][];
-  const color = getOperatorColor(selectedLineId);
-  return <Polyline positions={positions} pathOptions={{ color, weight: 4, opacity: 0.8 }} />;
+  return <Polyline positions={positions} pathOptions={{ color: '#FFCC00', weight: 4, opacity: 0.8 }} />;
 }
 
 function VehicleTracker({ vehicle, disabled, isPanelOpen, isPanelExpanded }: { vehicle: Vehicle | null; disabled: boolean; isPanelOpen?: boolean; isPanelExpanded?: boolean }) {
@@ -153,87 +148,19 @@ function MapRefSetter({ mapRef }: { mapRef: React.MutableRefObject<L.Map | null>
   return null;
 }
 
-function SelectedStopMarker({ stop, selectedLineId }: { stop: Stop | null; selectedLineId?: string | null }) {
+function SelectedStopMarker({ stop }: { stop: Stop | null }) {
   if (!stop) return null;
   const lat = Number(stop.lat);
   const lon = Number(stop.lon);
   if (isNaN(lat) || isNaN(lon)) return null;
-  return <Marker position={[lat, lon]} icon={getSelectedStopIcon(selectedLineId, stop.id)} zIndexOffset={500} />;
+  return <Marker position={[lat, lon]} icon={selectedStopIcon} zIndexOffset={500} />;
 }
-
-// ── Canvas-based vehicles layer (all CM buses as dots) ─
-
-const VEHICLE_RENDER_LIMIT = 800;
-
-const VehiclesCanvasLayer = memo(({ vehicles, selectedVehicleId, isDarkMap, onVehicleClick }: {
-  vehicles: Vehicle[];
-  selectedVehicleId?: string | null;
-  isDarkMap: boolean;
-  onVehicleClick?: (vehicle: Vehicle) => void;
-}) => {
-  const [bounds, setBounds] = useState<L.LatLngBounds | null>(null);
-  const [zoom, setZoom] = useState(12);
-
-  useMapEvents({
-    moveend: (e) => { setBounds(e.target.getBounds()); setZoom(e.target.getZoom()); },
-    zoomend: (e) => { setBounds(e.target.getBounds()); setZoom(e.target.getZoom()); },
-  });
-
-  const visibleVehicles = useMemo(() => {
-    if (!bounds || vehicles.length === 0) return [];
-    const results: Vehicle[] = [];
-    for (const v of vehicles) {
-      if (results.length >= VEHICLE_RENDER_LIMIT) break;
-      if (v.id === selectedVehicleId) continue; // selected vehicle rendered separately
-      const lat = Number(v.lat);
-      const lon = Number(v.lon);
-      if (!isNaN(lat) && !isNaN(lon) && bounds.contains([lat, lon])) {
-        results.push(v);
-      }
-    }
-    return results;
-  }, [vehicles, bounds, selectedVehicleId]);
-
-  // Smaller dots at low zoom, larger at high zoom
-  const radius = zoom <= 12 ? 3 : zoom <= 14 ? 4 : zoom <= 15 ? 5 : 6;
-
-  return (
-    <>
-      {visibleVehicles.map(v => {
-        const lat = Number(v.lat);
-        const lon = Number(v.lon);
-        const color = getOperatorColor(v.line_id);
-        return (
-          <CircleMarker
-            key={v.id}
-            center={[lat, lon]}
-            radius={radius}
-            pathOptions={{
-              fillColor: color,
-              fillOpacity: 0.85,
-              color: isDarkMap ? '#0d1117' : '#1A1A1A',
-              weight: 1,
-            }}
-            eventHandlers={{ click: () => onVehicleClick?.(v) }}
-          >
-            {zoom >= 14 && (
-              <Popup closeButton={false}>
-                <div className="text-center font-bold text-sm">Linha {v.line_id}</div>
-                <div className="text-xs opacity-75 text-center mt-1">{Math.round(v.speed * 3.6)} km/h</div>
-              </Popup>
-            )}
-          </CircleMarker>
-        );
-      })}
-    </>
-  );
-});
 
 // ── Canvas-based stops layer ──────────────────────────
 
 const STOP_RENDER_LIMIT = 500;
 
-const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap, selectedLineId }: { stops: Stop[], onStopSelect: (stop: Stop) => void, isDarkMap: boolean, selectedLineId?: string | null }) => {
+const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop[], onStopSelect: (stop: Stop) => void, isDarkMap: boolean }) => {
   const [bounds, setBounds] = useState<L.LatLngBounds | null>(null);
   const [zoom, setZoom] = useState(12);
 
@@ -272,24 +199,17 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap, selectedLineId 
       {visibleStops.map(stop => {
         const lat = Number(stop.lat);
         const lon = Number(stop.lon);
-        // Color each stop based on its operator (CL stops are green, CM stops use selected line color or yellow)
-        const stopColor = isCarrisLisboaStop(stop.id) || stop.operator === 'carris_lisboa'
-          ? getStopOperatorColor(stop.id)
-          : getOperatorColor(selectedLineId);
         return (
           <CircleMarker
             key={stop.id}
             center={[lat, lon]}
             radius={markerRadius}
-            pathOptions={{ fillColor: stopColor, fillOpacity: 0.9, color: isDarkMap ? '#0d1117' : '#1A1A1A', weight: borderWeight }}
+            pathOptions={{ fillColor: '#FFCC00', fillOpacity: 0.9, color: isDarkMap ? '#0d1117' : '#1A1A1A', weight: borderWeight }}
             eventHandlers={{ click: () => onStopSelect(stop) }}
           >
             <Popup closeButton={false}>
               <div className="text-center font-bold text-sm">{stop.name}</div>
               <div className="text-xs opacity-75 text-center mt-1">{stop.id}</div>
-              {stop.operator === 'carris_lisboa' && (
-                <div className="text-xs text-green-600 font-semibold text-center mt-1">Carris Lisboa</div>
-              )}
             </Popup>
           </CircleMarker>
         );
@@ -301,8 +221,7 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap, selectedLineId 
 // ── Main Component ────────────────────────────────────
 
 export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedPatternId, selectedLineId, selectedStop, isDarkMap, onToggleMapTheme, isPanelOpen, isPanelExpanded }: TrackingMapProps) {
-  const { stops, isLoading: isLoadingStops } = useAllStops();
-  const { vehicles: allVehicles } = useAllVehicles();
+  const { stops, isLoading: isLoadingStops } = useStops();
   const { vehicle } = useSingleVehicle(selectedVehicleId || null, selectedLineId, selectedPatternId);
   const mapRef = useRef<L.Map | null>(null);
   const [userFreeNav, setUserFreeNav] = useState(false);
@@ -386,11 +305,10 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
         <MapRefSetter mapRef={mapRef} />
         <DynamicTileLayer isDarkMap={isDarkMap} />
         <UserLocationLayer onLocationFound={handleUserLocationFound} />
-        <VehiclesCanvasLayer vehicles={allVehicles} selectedVehicleId={selectedVehicleId} isDarkMap={isDarkMap} />
-        <StopsCanvasLayer stops={stops} onStopSelect={handleStopSelect} isDarkMap={isDarkMap} selectedLineId={selectedLineId} />
-        <SelectedStopMarker stop={selectedStop || null} selectedLineId={selectedLineId} />
+        <StopsCanvasLayer stops={stops} onStopSelect={handleStopSelect} isDarkMap={isDarkMap} />
+        <SelectedStopMarker stop={selectedStop || null} />
         {vehicle && <BusMarker vehicle={vehicle} isSelected={true} />}
-        <PatternShape selectedPatternId={selectedPatternId} selectedLineId={selectedLineId} />
+        <PatternShape selectedPatternId={selectedPatternId} />
         <VehicleTracker vehicle={vehicle} disabled={userFreeNav} isPanelOpen={isPanelOpen} isPanelExpanded={isPanelExpanded} />
       </MapContainer>
 
@@ -435,9 +353,7 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
         {/* Back to selected stop */}
         {selectedStop && (
           <button
-            className={`pointer-events-auto w-11 h-11 rounded-full shadow-lg border border-white/20 flex items-center justify-center hover:brightness-110 active:scale-95 transition-all ${
-              isCarrisLisboa(selectedLineId) || isCarrisLisboaStop(selectedStop?.id) ? 'bg-carris-green text-white' : 'bg-carris-yellow text-carris-dark'
-            }`}
+            className="pointer-events-auto w-11 h-11 bg-carris-yellow text-carris-dark rounded-full shadow-lg border border-white/20 flex items-center justify-center hover:brightness-110 active:scale-95 transition-all"
             onClick={handleBackToStop}
             title="Voltar à minha paragem"
           >

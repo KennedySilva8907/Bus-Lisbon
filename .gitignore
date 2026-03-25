@@ -28,3 +28,10 @@ dist-ssr
 
 # Claude Code
 .claude*
+
+# Superpowers brainstorm
+.superpowers/
+docs/superpowers/
+
+# Test data
+*.test.json

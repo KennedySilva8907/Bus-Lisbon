@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TrackingMap from './components/TrackingMap';
 import StopDetailsPanel from './components/StopDetailsPanel';
 import SearchBar from './components/SearchBar';
+import SplashScreen from './components/SplashScreen';
+import { useStops } from './services/api';
 import type { Stop } from './services/api';
 import { useFavorites } from './hooks/useFavorites';
 
@@ -12,10 +14,42 @@ function App() {
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [isPanelExpanded, setIsPanelExpanded] = useState(true);
   const [isDarkMap, setIsDarkMap] = useState(() => {
-    const saved = localStorage.getItem('bdt-dark-map');
-    return saved !== null ? saved === 'true' : true; // default dark
+    try {
+      const saved = localStorage.getItem('bdt-dark-map');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
   });
   const { favorites, toggle: toggleFavorite, isFavorite } = useFavorites();
+
+  // Splash screen
+  const { isLoading: stopsLoading } = useStops();
+  const [showSplash, setShowSplash] = useState(true);
+  const [splashFading, setSplashFading] = useState(false);
+  const [minDelayPassed, setMinDelayPassed] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setMinDelayPassed(true), 5000);
+    let fadeTimer: ReturnType<typeof setTimeout>;
+    const maxTimer = setTimeout(() => {
+      setSplashFading(true);
+      fadeTimer = setTimeout(() => setShowSplash(false), 500);
+    }, 15000);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(maxTimer);
+      if (fadeTimer) clearTimeout(fadeTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!stopsLoading && minDelayPassed && !splashFading) {
+      setSplashFading(true);
+      const fadeTimer = setTimeout(() => setShowSplash(false), 500);
+      return () => clearTimeout(fadeTimer);
+    }
+  }, [stopsLoading, minDelayPassed, splashFading]);
 
   const toggleMapTheme = () => {
     setIsDarkMap(prev => {
@@ -36,6 +70,9 @@ function App() {
 
   return (
     <div className="w-screen relative bg-carris-dark overflow-hidden flex flex-col md:flex-row" style={{ height: '100dvh' }}>
+
+      {/* Splash Screen */}
+      {showSplash && <SplashScreen fading={splashFading} />}
 
       {/* Search Bar Overlay */}
       <SearchBar onStopSelect={handleStopSelect} favorites={favorites} />

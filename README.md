@@ -1,73 +1,73 @@
-# React + TypeScript + Vite
+# Bus Lisbon
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Real-time bus tracking PWA for **Carris Metropolitana** (Lisbon metropolitan area). View live bus positions, stop arrivals, route shapes, and past passages — all from your phone.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Live Map** — Bus positions updated every 5s on a dark/light Leaflet map with marker clustering
+- **Stop Details** — Tap any stop to see real-time ETAs with punctuality indicators (on time, delayed, early)
+- **Past Arrivals** — See which buses already passed, with actual vs scheduled times
+- **Route Shapes** — Tap an arrival to see the full route drawn on the map with the bus position
+- **Search** — Find any stop by name or ID
+- **Favorites** — Save frequently used stops for quick access
+- **Splash Screen** — Animated loading screen with logo and pulsing indicators
+- **PWA** — Install on iPhone/Android as a native-feeling app with offline support
+- **iOS Optimized** — Safe area insets, swipe gestures, pull-to-expand panel
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Layer | Technology |
+|-------|-----------|
+| Framework | React 19 + TypeScript |
+| Build | Vite 7 |
+| Styling | Tailwind CSS 3 |
+| Map | Leaflet + react-leaflet |
+| Data Fetching | SWR (stale-while-revalidate) |
+| Icons | lucide-react |
+| API | [Carris Metropolitana Public API](https://api.carrismetropolitana.pt) |
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+```bash
+# Install dependencies
+npm install
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+# Start dev server
+npm run dev
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Production build
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Project Structure
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+src/
+  components/
+    TrackingMap.tsx      # Main Leaflet map with stops, buses, routes
+    StopDetailsPanel.tsx # Bottom panel with ETAs + past arrivals
+    SearchBar.tsx        # Stop search overlay
+    BusMarker.tsx        # Animated bus icon on map
+    SplashScreen.tsx     # Loading screen
+  services/
+    api.ts              # Carris API hooks (SWR)
+    history.ts          # Arrival deviation tracking
+  hooks/
+    useFavorites.ts     # Favorite stops (localStorage)
+  App.tsx               # Root layout + splash logic
+  index.css             # Global styles + animations
+```
+
+## API
+
+Uses the public [Carris Metropolitana API](https://api.carrismetropolitana.pt):
+
+- `GET /stops` — All stops (cached 1h)
+- `GET /stops/:id/realtime` — Live ETAs + past arrivals for a stop
+- `GET /v2/vehicles` — All vehicle positions
+- `GET /patterns/:id` — Route pattern (shape reference)
+- `GET /shapes/:id` — Route geometry (GeoJSON)
+
+## License
+
+MIT

@@ -1,7 +1,0 @@
-﻿src/App.tsx(5,10): error TS1484: 'Stop' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
-src/components/BusMarker.tsx(3,10): error TS1484: 'Vehicle' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
-src/components/SearchBar.tsx(2,10): error TS1484: 'Stop' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
-src/components/StopDetailsPanel.tsx(1,10): error TS1484: 'Stop' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
-src/components/StopDetailsPanel.tsx(59,21): error TS6133: 'relativeTime' is declared but its value is never read.
-src/components/StopMarker.tsx(3,10): error TS1484: 'Stop' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
-src/components/TrackingMap.tsx(4,37): error TS1484: 'Stop' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.

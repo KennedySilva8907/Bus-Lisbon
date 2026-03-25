@@ -1,4 +1,4 @@
-import { MapContainer, useMap, Polyline, CircleMarker, Marker, Popup, useMapEvents } from 'react-leaflet';
+import { MapContainer, useMap, CircleMarker, Marker, Popup, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet-polylinedecorator';
 import { useStops, useSingleVehicle, usePatternShape, type Stop, type Vehicle } from '../services/api';

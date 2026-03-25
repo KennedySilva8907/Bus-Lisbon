@@ -41,6 +41,8 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
       .filter(eta => {
         if (eta.observed_arrival_unix != null && eta.observed_arrival_unix < nowUnix) return false;
         const time = eta.estimated_arrival_unix || eta.scheduled_arrival_unix;
+        // Skip stale entries whose arrival time is more than 2 minutes in the past
+        if (time < nowUnix - 120) return false;
         return time < nowUnix + 7200;
       })
       .sort((a, b) => {

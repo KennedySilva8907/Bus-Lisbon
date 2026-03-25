@@ -71,9 +71,9 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
     shouldFetch ? `${API_BASE_URL}/v2/vehicles` : null,
     fetcher,
     {
-      refreshInterval: shouldFetch ? 5000 : 0,
+      refreshInterval: shouldFetch ? 8000 : 0,
       revalidateOnFocus: false,
-      dedupingInterval: 4000,
+      dedupingInterval: 7000,
       keepPreviousData: true,
     }
   );

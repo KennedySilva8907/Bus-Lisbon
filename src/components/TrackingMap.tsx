@@ -1,5 +1,6 @@
 import { MapContainer, useMap, Polyline, CircleMarker, Marker, Popup, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet-polylinedecorator';
 import { useStops, useSingleVehicle, usePatternShape, type Stop, type Vehicle } from '../services/api';
 import { useEffect, memo, useCallback, useState, useMemo, useRef } from 'react';
 import BusMarker from './BusMarker';
@@ -14,30 +15,35 @@ L.Icon.Default.mergeOptions({
 
 const LISBON_CENTER: [number, number] = [38.7223, -9.1393];
 
-const TILE_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-const TILE_LIGHT = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+const TILE_GOOGLE = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
 
-// Dynamic tile layer that swaps tiles via Leaflet API
+// Dynamic tile layer — Google Maps, CSS filter on tile-pane for dark mode
 function DynamicTileLayer({ isDarkMap }: { isDarkMap: boolean }) {
   const map = useMap();
   const layerRef = useRef<L.TileLayer | null>(null);
 
+  // Create tile layer once
   useEffect(() => {
-    if (layerRef.current) map.removeLayer(layerRef.current);
-
-    const url = isDarkMap ? TILE_DARK : TILE_LIGHT;
-    const layer = L.tileLayer(url, {
+    if (layerRef.current) return;
+    const layer = L.tileLayer(TILE_GOOGLE, {
       maxZoom: 20,
-      subdomains: isDarkMap ? 'abcd' : 'abc',
-      attribution: isDarkMap
-        ? '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-        : '&copy; <a href="https://www.google.com/intl/en_us/help/terms_maps/">Google Maps</a>',
+      attribution: '&copy; <a href="https://www.google.com/intl/en_us/help/terms_maps/">Google Maps</a>',
     });
     layer.addTo(map);
     layer.setZIndex(0);
     layerRef.current = layer;
+    return () => { if (layerRef.current) { map.removeLayer(layerRef.current); layerRef.current = null; } };
+  }, [map]);
 
-    return () => { if (layerRef.current) map.removeLayer(layerRef.current); };
+  // Apply dark filter directly on the tile-pane (always exists, no timing issues)
+  useEffect(() => {
+    const pane = map.getPane('tilePane');
+    if (pane) {
+      pane.style.filter = isDarkMap
+        ? 'invert(1) hue-rotate(180deg) brightness(0.9) contrast(1.1) saturate(0.3)'
+        : 'none';
+      pane.style.transition = 'filter 0.3s ease';
+    }
   }, [isDarkMap, map]);
 
   return null;
@@ -67,32 +73,166 @@ interface TrackingMapProps {
 
 // ── Internal map components (need useMap) ──────────────
 
+// ── Route line + directional arrows (senior design) ──
+// Line weight and arrow size scale together so arrows NEVER overflow the line.
+// Arrow headAngle is narrow (35°) = elongated along direction, thin perpendicular.
+// Everything rebuilds on zoom for pixel-perfect rendering at every level.
+
 function PatternShape({ selectedPatternId }: { selectedPatternId?: string | null }) {
   const { shape } = usePatternShape(selectedPatternId);
-  if (!shape || shape.length === 0) return null;
-  const positions = shape.map((coord: number[]) => [coord[1], coord[0]]) as [number, number][];
-  return <Polyline positions={positions} pathOptions={{ color: '#FFCC00', weight: 4, opacity: 0.8 }} />;
+  const map = useMap();
+  const borderRef = useRef<L.Polyline | null>(null);
+  const lineRef = useRef<L.Polyline | null>(null);
+  const decoratorRef = useRef<any>(null);
+  const prevPositionsRef = useRef<string>('');
+
+  const positions = useMemo(() => {
+    if (!shape || shape.length === 0) return [];
+    return shape.map((coord: number[]) => [coord[1], coord[0]]) as [number, number][];
+  }, [shape]);
+
+  useEffect(() => {
+    if (!map.getPane('routeArrowsPane')) {
+      const pane = map.createPane('routeArrowsPane');
+      pane.style.zIndex = '410';
+    }
+  }, [map]);
+
+  const [zoom, setZoom] = useState(map.getZoom());
+  useMapEvents({ zoomend: (e) => setZoom(e.target.getZoom()) });
+
+  const dims = useMemo(() => {
+    let lineWeight: number;
+    let borderWeight: number;
+    if (zoom <= 12)      { lineWeight = 3; borderWeight = 5; }
+    else if (zoom <= 13) { lineWeight = 4; borderWeight = 6; }
+    else if (zoom <= 14) { lineWeight = 5; borderWeight = 7; }
+    else if (zoom <= 15) { lineWeight = 6; borderWeight = 8; }
+    else if (zoom <= 16) { lineWeight = 7; borderWeight = 10; }
+    else                 { lineWeight = 8; borderWeight = 11; }
+    const arrowSize = Math.round(lineWeight * 1.4);
+    const repeat = arrowSize * 8;
+    return { lineWeight, borderWeight, arrowSize, repeat };
+  }, [zoom]);
+
+  // Create or update polylines (never destroy on zoom — just restyle)
+  useEffect(() => {
+    const posKey = positions.length > 0 ? `${positions[0][0]},${positions.length}` : '';
+
+    // Route changed — destroy everything and recreate
+    if (posKey !== prevPositionsRef.current) {
+      if (borderRef.current) { map.removeLayer(borderRef.current); borderRef.current = null; }
+      if (lineRef.current) { map.removeLayer(lineRef.current); lineRef.current = null; }
+      if (decoratorRef.current) { map.removeLayer(decoratorRef.current); decoratorRef.current = null; }
+      prevPositionsRef.current = posKey;
+
+      if (positions.length < 2) return;
+
+      borderRef.current = L.polyline(positions, {
+        color: '#000000', weight: dims.borderWeight, opacity: 0.25,
+        lineCap: 'round', lineJoin: 'round',
+      }).addTo(map);
+
+      lineRef.current = L.polyline(positions, {
+        color: '#E53935', weight: dims.lineWeight, opacity: 0.9,
+        lineCap: 'round', lineJoin: 'round',
+      }).addTo(map);
+    } else if (positions.length >= 2) {
+      // Same route, zoom changed — just update weights (no flicker)
+      if (borderRef.current) borderRef.current.setStyle({ weight: dims.borderWeight });
+      if (lineRef.current) lineRef.current.setStyle({ weight: dims.lineWeight });
+    }
+
+    // Always rebuild decorator on zoom (arrow size changes)
+    if (decoratorRef.current) {
+      map.removeLayer(decoratorRef.current);
+      decoratorRef.current = null;
+    }
+    if (lineRef.current && positions.length >= 2) {
+      decoratorRef.current = (L as any).polylineDecorator(lineRef.current, {
+        patterns: [{
+          offset: dims.repeat,
+          repeat: dims.repeat,
+          symbol: (L as any).Symbol.arrowHead({
+            pixelSize: dims.arrowSize,
+            headAngle: 40,
+            polygon: true,
+            pathOptions: {
+              color: 'rgba(255,255,255,0.9)',
+              fillColor: 'rgba(255,255,255,0.9)',
+              fillOpacity: 1,
+              weight: 0,
+              opacity: 1,
+              pane: 'routeArrowsPane',
+            },
+          }),
+        }],
+      }).addTo(map);
+    }
+  }, [positions, map, dims]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (borderRef.current) map.removeLayer(borderRef.current);
+      if (lineRef.current) map.removeLayer(lineRef.current);
+      if (decoratorRef.current) map.removeLayer(decoratorRef.current);
+    };
+  }, [map]);
+
+  return null;
 }
 
 function VehicleTracker({ vehicle, disabled, isPanelOpen, isPanelExpanded }: { vehicle: Vehicle | null; disabled: boolean; isPanelOpen?: boolean; isPanelExpanded?: boolean }) {
   const map = useMap();
+  const hasCenteredRef = useRef(false);
+  const trackedVehicleIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (disabled) return;
-    if (vehicle && vehicle.lat && vehicle.lon) {
-      const lat = Number(vehicle.lat);
-      const lon = Number(vehicle.lon);
-      // Compensate for panel height on mobile so the bus stays visible above the panel
+    // Reset centering when tracking a different vehicle
+    if (vehicle && vehicle.id !== trackedVehicleIdRef.current) {
+      hasCenteredRef.current = false;
+      trackedVehicleIdRef.current = vehicle.id;
+    }
+    if (!vehicle) {
+      hasCenteredRef.current = false;
+      trackedVehicleIdRef.current = null;
+    }
+  }, [vehicle?.id]);
+
+  useEffect(() => {
+    if (disabled || !vehicle || !vehicle.lat || !vehicle.lon) return;
+
+    const lat = Number(vehicle.lat);
+    const lon = Number(vehicle.lon);
+    const busLatLng = L.latLng(lat, lon);
+
+    const flyToWithOffset = (zoom: number) => {
       if (typeof window !== 'undefined' && window.innerWidth < 768 && isPanelOpen) {
         const panelPx = isPanelExpanded ? window.innerHeight * 0.55 : 80;
-        const targetPoint = map.project(L.latLng(lat, lon), 16);
+        const targetPoint = map.project(busLatLng, zoom);
         const offsetPoint = L.point(targetPoint.x, targetPoint.y + panelPx / 2);
-        const offsetLatLng = map.unproject(offsetPoint, 16);
-        map.flyTo(offsetLatLng, 16, { animate: true });
+        const offsetLatLng = map.unproject(offsetPoint, zoom);
+        map.flyTo(offsetLatLng, zoom, { animate: true, duration: 1 });
       } else {
-        map.flyTo([lat, lon], 16, { animate: true });
+        map.flyTo(busLatLng, zoom, { animate: true, duration: 1 });
       }
+    };
+
+    // First time seeing this vehicle — always center
+    if (!hasCenteredRef.current) {
+      hasCenteredRef.current = true;
+      flyToWithOffset(16);
+      return;
+    }
+
+    // Subsequent updates — only re-center if bus is outside visible bounds (with padding)
+    const bounds = map.getBounds().pad(-0.15); // shrink bounds by 15% for margin
+    if (!bounds.contains(busLatLng)) {
+      flyToWithOffset(map.getZoom());
     }
   }, [vehicle, map, disabled, isPanelOpen, isPanelExpanded]);
+
   return null;
 }
 
@@ -161,8 +301,17 @@ function SelectedStopMarker({ stop }: { stop: Stop | null }) {
 const STOP_RENDER_LIMIT = 500;
 
 const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop[], onStopSelect: (stop: Stop) => void, isDarkMap: boolean }) => {
+  const map = useMap();
   const [bounds, setBounds] = useState<L.LatLngBounds | null>(null);
   const [zoom, setZoom] = useState(12);
+
+  // Create a custom pane for stops above route arrows
+  useEffect(() => {
+    if (!map.getPane('stopsPane')) {
+      const pane = map.createPane('stopsPane');
+      pane.style.zIndex = '450';
+    }
+  }, [map]);
 
   useMapEvents({
     moveend: (e) => { setBounds(e.target.getBounds()); setZoom(e.target.getZoom()); },
@@ -204,7 +353,7 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop
             key={stop.id}
             center={[lat, lon]}
             radius={markerRadius}
-            pathOptions={{ fillColor: '#FFCC00', fillOpacity: 0.9, color: isDarkMap ? '#0d1117' : '#1A1A1A', weight: borderWeight }}
+            pathOptions={{ fillColor: '#FFCC00', fillOpacity: 0.9, color: isDarkMap ? '#0d1117' : '#1A1A1A', weight: borderWeight, pane: 'stopsPane' }}
             eventHandlers={{ click: () => onStopSelect(stop) }}
           >
             <Popup closeButton={false}>

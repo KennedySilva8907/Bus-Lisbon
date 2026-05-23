@@ -53,3 +53,69 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 });
+
+// ── Push notifications ──────────────────────────────────────
+// Backend POSTs JSON via the web-push protocol; we render the notification.
+// Expected payload shape:
+//   { title, body, tag, stopId, vehicleId, lineId, url }
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = {}; }
+
+  const title = data.title || '🚌 Autocarro a chegar';
+  const body  = data.body  || 'O teu autocarro está próximo.';
+  const tag   = data.tag   || `bus-${data.vehicleId || ''}-${data.stopId || ''}`;
+
+  const options = {
+    body,
+    tag,                     // collapses repeated alerts for same bus/stop
+    renotify: true,
+    icon: '/icon-512.png',
+    badge: '/icon-512.png',
+    vibrate: [200, 100, 200],
+    data: {
+      url: data.url || '/',
+      stopId: data.stopId,
+      vehicleId: data.vehicleId,
+      lineId: data.lineId,
+      patternId: data.patternId,
+    },
+  };
+
+  event.waitUntil((async () => {
+    await self.registration.showNotification(title, options);
+    // Tell every open client (tab/window) that this alert just fired so the
+    // bell badge can update without waiting for a backend refresh.
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of all) {
+      client.postMessage({
+        type: 'alert-fired',
+        payload: {
+          vehicleId: data.vehicleId,
+          stopId: data.stopId,
+          lineId: data.lineId,
+        },
+      });
+    }
+  })());
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    // Focus an existing window if one is already open on our origin
+    for (const client of all) {
+      if ('focus' in client) {
+        client.postMessage({ type: 'open-alert-target', payload: event.notification.data });
+        return client.focus();
+      }
+    }
+    if (self.clients.openWindow) {
+      return self.clients.openWindow(targetUrl);
+    }
+  })());
+});

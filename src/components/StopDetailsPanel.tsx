@@ -1,8 +1,11 @@
-import { useStopETA, type Stop } from '../services/api';
+import { useStopETA, type Stop, type ETA } from '../services/api';
 import { fromUnixTime } from 'date-fns';
 import { X, Star, ChevronUp } from 'lucide-react';
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { recordDeviation } from '../services/history';
+import { useAlerts } from '../hooks/useAlerts';
+import NotificationBell from './NotificationBell';
+import AlertSetupModal from './AlertSetupModal';
 
 interface StopDetailsPanelProps {
   stop: Stop | null;
@@ -17,19 +20,35 @@ interface StopDetailsPanelProps {
 }
 
 export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleExpand, selectedVehicleId, selectedPatternId, onVehicleSelect, isFavorite, onToggleFavorite }: StopDetailsPanelProps) {
-  const { etas, isLoading } = useStopETA(stop?.id || null);
+  const { etas, lastUpdated, isLoading } = useStopETA(stop?.id || null);
   const panelRef = useRef<HTMLElement>(null);
   const touchRef = useRef({ startY: 0, isDragging: false, isOnHandle: false });
   const [showAllPast, setShowAllPast] = useState(false);
+  const { findAlertFor, create: createAlert, cancel: cancelAlert } = useAlerts();
+  const [alertModalEta, setAlertModalEta] = useState<ETA | null>(null);
 
   // Reset showAllPast when stop changes
   useEffect(() => {
     setShowAllPast(false);
   }, [stop?.id]);
 
-  if (!stop) return null;
+  // Tick "now" every 5s so countdowns drop smoothly instead of waiting on the
+  // 8s SWR refresh. Also resync immediately when the page becomes visible
+  // again (iOS Safari throttles background timers).
+  const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const tick = () => setNowUnix(Math.floor(Date.now() / 1000));
+    const interval = setInterval(tick, 5000);
+    const onVisibility = () => { if (document.visibilityState === 'visible') tick(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
 
-  const nowUnix = Math.floor(Date.now() / 1000);
+  const dataAgeSec = lastUpdated ? Math.max(0, nowUnix - Math.floor(lastUpdated / 1000)) : 0;
+  const isStale = dataAgeSec > 30;
 
   // Split into past and future arrivals (memoized to avoid re-renders)
   const { pastEtas, futureEtas, recentPast, olderPast } = useMemo(() => {
@@ -41,8 +60,10 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
       .filter(eta => {
         if (eta.observed_arrival_unix != null && eta.observed_arrival_unix < nowUnix) return false;
         const time = eta.estimated_arrival_unix || eta.scheduled_arrival_unix;
-        // Skip stale entries whose arrival time is more than 2 minutes in the past
-        if (time < nowUnix - 120) return false;
+        // Tightened from -120s to -60s: the bus has either arrived or its
+        // prediction is stale enough that the user is better off seeing the
+        // next one.
+        if (time < nowUnix - 60) return false;
         return time < nowUnix + 7200;
       })
       .sort((a, b) => {
@@ -71,6 +92,8 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [futureEtaKeys, stop?.id]);
+
+  if (!stop) return null;
 
   // ── Touch swipe handlers (only on drag handle area, not scrollable content) ──
   const handleHandleTouchStart = (e: React.TouchEvent) => {
@@ -133,7 +156,10 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
         <div className="w-10 h-1 bg-gray-500 rounded-full"></div>
       </div>
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4 text-white custom-scrollbar flex flex-col">
+      <div
+        className="flex-1 overflow-y-auto overflow-x-hidden px-4 text-white custom-scrollbar flex flex-col"
+        style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+      >
         {/* Header */}
         <div
           className="flex justify-between items-center mb-3"
@@ -149,6 +175,14 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                 #{stop.id}
               </span>
               {stop.locality && <span className="opacity-70 text-gray-300 text-[12px] truncate">{stop.locality}</span>}
+              {isStale && (
+                <span
+                  className="text-[10px] text-orange-300/80 bg-orange-400/10 border border-orange-400/20 px-1.5 py-0.5 rounded-full flex-shrink-0"
+                  title={`Última atualização há ${dataAgeSec}s`}
+                >
+                  ↻ há {dataAgeSec < 60 ? `${dataAgeSec}s` : `${Math.floor(dataAgeSec / 60)}min`}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
@@ -208,8 +242,21 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                         else if (delaySec > 120) { directionLabel = `+${Math.round(delaySec / 60)}min`; directionColor = 'text-orange-400'; directionBg = 'bg-orange-400/10'; }
                         else { directionLabel = 'Pontual'; directionColor = 'text-green-400'; directionBg = 'bg-green-400/10'; }
 
+                        const canTrack = !!eta.vehicle_id;
+                        const isSelected = canTrack && selectedVehicleId === eta.vehicle_id;
+
                         return (
-                          <div key={`past-old-${eta.vehicle_id || eta.line_id}-${i}`} className="flex items-center gap-3 p-2.5 rounded-xl border bg-white/[0.015] border-white/[0.03] opacity-40">
+                          <div
+                            key={`past-old-${eta.vehicle_id || eta.line_id}-${i}`}
+                            onClick={canTrack && onVehicleSelect ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id) : undefined}
+                            className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
+                              isSelected
+                                ? 'bg-carris-yellow/10 border-carris-yellow/40 ring-1 ring-carris-yellow/30 opacity-90'
+                                : canTrack
+                                  ? 'bg-white/[0.015] border-white/[0.03] opacity-40 hover:opacity-70 cursor-pointer active:scale-[0.98]'
+                                  : 'bg-white/[0.015] border-white/[0.03] opacity-40'
+                            }`}
+                          >
                             <div className="flex-shrink-0 w-14 text-center">
                               <div className="font-black text-sm px-2 py-1.5 rounded-lg bg-carris-yellow/20 text-carris-yellow/60">{eta.line_id}</div>
                             </div>
@@ -217,6 +264,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                               <div className="font-semibold text-[13px] truncate leading-tight text-gray-400">{eta.headsign}</div>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 {directionLabel && <span className={`text-[10px] ${directionColor} ${directionBg} px-1.5 py-0.5 rounded-full flex-shrink-0`}>{directionLabel}</span>}
+                                {canTrack && <span className="text-[10px] text-gray-400/70">· toca para ver no mapa</span>}
                               </div>
                             </div>
                             <div className="flex-shrink-0 text-right pl-2">
@@ -242,8 +290,21 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                     else if (delaySec > 120) { directionLabel = `+${Math.round(delaySec / 60)}min`; directionColor = 'text-orange-400'; directionBg = 'bg-orange-400/10'; }
                     else { directionLabel = 'Pontual'; directionColor = 'text-green-400'; directionBg = 'bg-green-400/10'; }
 
+                    const canTrack = !!eta.vehicle_id;
+                    const isSelected = canTrack && selectedVehicleId === eta.vehicle_id;
+
                     return (
-                      <div key={`past-recent-${eta.vehicle_id || eta.line_id}-${i}`} className="flex items-center gap-3 p-2.5 rounded-xl border bg-white/[0.015] border-white/[0.03] opacity-50">
+                      <div
+                        key={`past-recent-${eta.vehicle_id || eta.line_id}-${i}`}
+                        onClick={canTrack && onVehicleSelect ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id) : undefined}
+                        className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
+                          isSelected
+                            ? 'bg-carris-yellow/10 border-carris-yellow/40 ring-1 ring-carris-yellow/30 opacity-90'
+                            : canTrack
+                              ? 'bg-white/[0.015] border-white/[0.03] opacity-50 hover:opacity-80 cursor-pointer active:scale-[0.98]'
+                              : 'bg-white/[0.015] border-white/[0.03] opacity-50'
+                        }`}
+                      >
                         <div className="flex-shrink-0 w-14 text-center">
                           <div className="font-black text-sm px-2 py-1.5 rounded-lg bg-carris-yellow/20 text-carris-yellow/60">{eta.line_id}</div>
                         </div>
@@ -251,6 +312,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                           <div className="font-semibold text-[13px] truncate leading-tight text-gray-400">{eta.headsign}</div>
                           <div className="flex items-center gap-1.5 mt-0.5">
                             {directionLabel && <span className={`text-[10px] ${directionColor} ${directionBg} px-1.5 py-0.5 rounded-full flex-shrink-0`}>{directionLabel}</span>}
+                            {canTrack && <span className="text-[10px] text-gray-400/70">· toca para ver no mapa</span>}
                           </div>
                         </div>
                         <div className="flex-shrink-0 text-right pl-2">
@@ -280,7 +342,12 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
               ) : (
                 futureEtas.map((eta, i) => {
                   const time = eta.estimated_arrival_unix || eta.scheduled_arrival_unix;
-                  const diffMinutes = Math.round((time - nowUnix) / 60);
+                  const diffSec = time - nowUnix;
+                  // Align the countdown with the clock time shown below it: the
+                  // absolute time uses HH:mm (seconds truncated), so the user
+                  // computes "arrival_min − current_min". Matching that math
+                  // here keeps both numbers consistent — see #ETA-display.
+                  const diffMinutes = Math.floor(time / 60) - Math.floor(nowUnix / 60);
                   const hasVehicle = !!eta.vehicle_id;
                   const hasEstimate = !hasVehicle && !!eta.estimated_arrival_unix && eta.estimated_arrival_unix !== eta.scheduled_arrival_unix;
                   const isTracked = hasVehicle || hasEstimate;
@@ -299,8 +366,11 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                   }
 
                   let displayTime: string;
-                  if (diffMinutes <= 0) {
+                  if (diffSec <= 30) {
                     displayTime = 'Agora';
+                  } else if (diffMinutes <= 0) {
+                    // Same clock minute as "now" but still 31–59s away
+                    displayTime = '<1min';
                   } else if (diffMinutes < 60) {
                     displayTime = `${diffMinutes}min`;
                   } else {
@@ -362,6 +432,21 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                           )}
                         </div>
                       </div>
+                      {hasVehicle && stop && (() => {
+                        const existing = findAlertFor(eta.vehicle_id, stop.id);
+                        return (
+                          <NotificationBell
+                            isActive={!!existing}
+                            onClick={() => {
+                              if (existing) {
+                                cancelAlert(existing.id);
+                              } else {
+                                setAlertModalEta(eta);
+                              }
+                            }}
+                          />
+                        );
+                      })()}
                       <div className="flex-shrink-0 text-right pl-2">
                         <div className={`font-bold text-[15px] leading-tight ${
                           diffMinutes <= 0 ? 'text-green-400 animate-pulse'
@@ -384,6 +469,27 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
           )}
         </div>
       </div>
+
+      <AlertSetupModal
+        open={!!alertModalEta}
+        context={alertModalEta ? {
+          lineId: alertModalEta.line_id,
+          stopName: stop.name,
+          arrivalUnix: alertModalEta.estimated_arrival_unix || alertModalEta.scheduled_arrival_unix,
+        } : null}
+        onClose={() => setAlertModalEta(null)}
+        onConfirm={async (thresholdMinutes) => {
+          if (!alertModalEta) return;
+          await createAlert({
+            vehicleId: alertModalEta.vehicle_id,
+            lineId: alertModalEta.line_id,
+            patternId: alertModalEta.pattern_id,
+            stopId: stop.id,
+            stopName: stop.name,
+            thresholdMinutes,
+          });
+        }}
+      />
     </aside>
   );
 }

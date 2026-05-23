@@ -91,18 +91,33 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
 
 // ── ETAs ───────────────────────────────────────────────
 
+// Tracks the wall-clock time of the last successful realtime fetch per stop.
+// Module-scoped so the staleness check survives unmounts and is shared across
+// any consumer of useStopETA for the same stop.
+const lastETAFetchAt = new Map<string, number>();
+
 export function useStopETA(stopId: string | null) {
+  const key = stopId ? `${API_BASE_URL}/stops/${stopId}/realtime` : null;
   const { data, error, isLoading } = useSWR<ETA[]>(
-    stopId ? `${API_BASE_URL}/stops/${stopId}/realtime` : null, 
+    key,
     fetcher,
-    { 
+    {
       refreshInterval: 8000,
-      revalidateOnFocus: false,
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
       keepPreviousData: true,
+      onSuccess: () => {
+        if (key) lastETAFetchAt.set(key, Date.now());
+      },
     }
   );
-  
-  return { etas: data || [], isLoading, isError: error };
+
+  // iOS Safari pauses background timers, so a "3min" prediction may have been
+  // computed minutes ago. Null until the first fetch lands — the consumer is
+  // expected to treat that as "fresh" rather than infinitely stale.
+  const lastUpdated = (key && lastETAFetchAt.get(key)) || null;
+
+  return { etas: data || [], lastUpdated, isLoading, isError: error };
 }
 
 // ── Pattern Shape (cached indefinitely) ────────────────

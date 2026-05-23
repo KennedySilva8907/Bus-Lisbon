@@ -23,8 +23,28 @@ function App() {
   });
   const { favorites, toggle: toggleFavorite, isFavorite } = useFavorites();
 
+  // Notification-click target: a stop the user came in to see. Resolved once
+  // stops finish loading (we get just the id from the URL or SW message).
+  const [pendingTarget, setPendingTarget] = useState<{
+    stopId: string;
+    vehicleId?: string | null;
+    patternId?: string | null;
+    lineId?: string | null;
+  } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    const stopId = params.get('stop');
+    if (!stopId) return null;
+    return {
+      stopId,
+      vehicleId: params.get('vehicle'),
+      patternId: params.get('pattern'),
+      lineId: params.get('line'),
+    };
+  });
+
   // Splash screen
-  const { isLoading: stopsLoading } = useStops();
+  const { isLoading: stopsLoading, stops } = useStops();
   const [showSplash, setShowSplash] = useState(true);
   const [splashFading, setSplashFading] = useState(false);
   const [minDelayPassed, setMinDelayPassed] = useState(false);
@@ -51,6 +71,38 @@ function App() {
     }
   }, [stopsLoading, minDelayPassed, splashFading]);
 
+  // Listen for notification clicks while the app is already open — the SW
+  // posts {type:'open-alert-target', payload:{stopId, vehicleId}}.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'open-alert-target') {
+        const { stopId, vehicleId, patternId, lineId } = e.data.payload || {};
+        if (stopId) setPendingTarget({ stopId, vehicleId, patternId, lineId });
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handler);
+    return () => navigator.serviceWorker.removeEventListener('message', handler);
+  }, []);
+
+  // Resolve the notification target once stops are loaded.
+  useEffect(() => {
+    if (!pendingTarget || stops.length === 0) return;
+    const stop = stops.find(s => s.id === pendingTarget.stopId);
+    if (stop) {
+      setSelectedStop(stop);
+      setSelectedVehicleId(pendingTarget.vehicleId ?? null);
+      setSelectedPatternId(pendingTarget.patternId ?? null);
+      setSelectedLineId(pendingTarget.lineId ?? null);
+      setIsPanelExpanded(true);
+    }
+    setPendingTarget(null);
+    // Clear the deep-link params so reloads don't re-trigger
+    if (typeof window !== 'undefined' && window.history.replaceState) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [pendingTarget, stops]);
+
   const toggleMapTheme = () => {
     setIsDarkMap(prev => {
       const next = !prev;
@@ -69,7 +121,7 @@ function App() {
   };
 
   return (
-    <div className="w-screen relative bg-carris-dark overflow-hidden flex flex-col md:flex-row" style={{ height: '100dvh' }}>
+    <div className="w-full h-full relative bg-carris-dark overflow-hidden flex flex-col md:flex-row">
 
       {/* Splash Screen */}
       {showSplash && <SplashScreen fading={splashFading} />}

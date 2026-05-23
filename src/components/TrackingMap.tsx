@@ -6,8 +6,10 @@ import { useEffect, memo, useCallback, useState, useMemo, useRef } from 'react';
 import BusMarker from './BusMarker';
 import AlertsPanel from './AlertsPanel';
 
-// Fix for default Leaflet marker icons in React
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+// Fix for default Leaflet marker icons in React. Leaflet looks up icon paths
+// via a private _getIconUrl method on the prototype; bundlers can't resolve
+// those URLs at runtime, so we strip the method and feed mergeOptions below.
+delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: '/marker-icon-2x.png',
   iconUrl: '/marker-icon.png',
@@ -84,7 +86,7 @@ function PatternShape({ selectedPatternId }: { selectedPatternId?: string | null
   const map = useMap();
   const borderRef = useRef<L.Polyline | null>(null);
   const lineRef = useRef<L.Polyline | null>(null);
-  const decoratorRef = useRef<any>(null);
+  const decoratorRef = useRef<L.Layer | null>(null);
   const prevPositionsRef = useRef<string>('');
 
   const positions = useMemo(() => {
@@ -154,11 +156,11 @@ function PatternShape({ selectedPatternId }: { selectedPatternId?: string | null
       decoratorRef.current = null;
     }
     if (lineRef.current && positions.length >= 2) {
-      decoratorRef.current = (L as any).polylineDecorator(lineRef.current, {
+      decoratorRef.current = L.polylineDecorator(lineRef.current, {
         patterns: [{
           offset: dims.repeat,
           repeat: dims.repeat,
-          symbol: (L as any).Symbol.arrowHead({
+          symbol: L.Symbol.arrowHead({
             pixelSize: dims.arrowSize,
             headAngle: 40,
             polygon: true,
@@ -194,17 +196,20 @@ function VehicleTracker({ vehicle, disabled, isPanelOpen, isPanelExpanded }: { v
   const hasCenteredRef = useRef(false);
   const trackedVehicleIdRef = useRef<string | null>(null);
 
+  // We only care about identity changes, not every position update. Pulling
+  // the id out makes the dependency check happy without re-running on every
+  // 5s vehicle refresh.
+  const vehicleId = vehicle?.id ?? null;
   useEffect(() => {
-    // Reset centering when tracking a different vehicle
-    if (vehicle && vehicle.id !== trackedVehicleIdRef.current) {
+    if (vehicleId && vehicleId !== trackedVehicleIdRef.current) {
       hasCenteredRef.current = false;
-      trackedVehicleIdRef.current = vehicle.id;
+      trackedVehicleIdRef.current = vehicleId;
     }
-    if (!vehicle) {
+    if (!vehicleId) {
       hasCenteredRef.current = false;
       trackedVehicleIdRef.current = null;
     }
-  }, [vehicle?.id]);
+  }, [vehicleId]);
 
   useEffect(() => {
     if (disabled || !vehicle || !vehicle.lat || !vehicle.lon) return;
@@ -454,10 +459,13 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
     userLocationRef.current = latlng;
   }, []);
 
-  // Reset free navigation when a NEW vehicle is selected
+  // Reset free navigation when a NEW vehicle is selected. We sync derived
+  // state to a prop change here, which is the documented exception to the
+  // 'no setState in effect' rule.
   const prevVehicleId = useRef<string | null>(null);
   useEffect(() => {
     if (selectedVehicleId && selectedVehicleId !== prevVehicleId.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUserFreeNav(false);
     }
     prevVehicleId.current = selectedVehicleId || null;

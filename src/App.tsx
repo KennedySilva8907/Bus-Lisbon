@@ -63,8 +63,12 @@ function App() {
     };
   }, []);
 
+  // Drive the splash fade once the stops are loaded and the minimum on-screen
+  // duration has passed. This is the documented exception to the
+  // 'no setState in effect' rule — we're reacting to an external async load.
   useEffect(() => {
     if (!stopsLoading && minDelayPassed && !splashFading) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSplashFading(true);
       const fadeTimer = setTimeout(() => setShowSplash(false), 500);
       return () => clearTimeout(fadeTimer);
@@ -85,11 +89,14 @@ function App() {
     return () => navigator.serviceWorker.removeEventListener('message', handler);
   }, []);
 
-  // Resolve the notification target once stops are loaded.
+  // Resolve the notification target once stops are loaded — another valid
+  // 'react to async data' case. We only get an id from the URL/SW; the
+  // matching Stop object only exists after useStops resolves.
   useEffect(() => {
     if (!pendingTarget || stops.length === 0) return;
     const stop = stops.find(s => s.id === pendingTarget.stopId);
     if (stop) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedStop(stop);
       setSelectedVehicleId(pendingTarget.vehicleId ?? null);
       setSelectedPatternId(pendingTarget.patternId ?? null);

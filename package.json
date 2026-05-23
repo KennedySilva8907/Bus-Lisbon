@@ -1,8 +1,34 @@
 {
-  "name": "bdt",
+  "name": "bus-lisbon",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "description": "Real-time bus tracker PWA for Carris Metropolitana (Lisbon) with web-push arrival alerts, offline support, and an iOS-native feel.",
+  "author": "Kennedy Silva (KennedySilva8907)",
+  "license": "MIT",
+  "homepage": "https://buslisbon.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KennedySilva8907/Bus-Lisbon.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KennedySilva8907/Bus-Lisbon/issues"
+  },
+  "keywords": [
+    "lisbon",
+    "lisboa",
+    "carris-metropolitana",
+    "bus-tracker",
+    "real-time",
+    "pwa",
+    "react",
+    "typescript",
+    "vite",
+    "leaflet",
+    "web-push",
+    "vercel",
+    "upstash"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

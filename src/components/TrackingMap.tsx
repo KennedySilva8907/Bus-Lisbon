@@ -4,6 +4,7 @@ import 'leaflet-polylinedecorator';
 import { useStops, useSingleVehicle, usePatternShape, type Stop, type Vehicle } from '../services/api';
 import { useEffect, memo, useCallback, useState, useMemo, useRef } from 'react';
 import BusMarker from './BusMarker';
+import AlertsPanel from './AlertsPanel';
 
 // Fix for default Leaflet marker icons in React
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -131,11 +132,15 @@ function PatternShape({ selectedPatternId }: { selectedPatternId?: string | null
       borderRef.current = L.polyline(positions, {
         color: '#000000', weight: dims.borderWeight, opacity: 0.25,
         lineCap: 'round', lineJoin: 'round',
+        // Don't intercept taps: stops sit on top of this line and were being
+        // swallowed when the user tapped near where the polyline ran through.
+        interactive: false,
       }).addTo(map);
 
       lineRef.current = L.polyline(positions, {
         color: '#E53935', weight: dims.lineWeight, opacity: 0.9,
         lineCap: 'round', lineJoin: 'round',
+        interactive: false,
       }).addTo(map);
     } else if (positions.length >= 2) {
       // Same route, zoom changed — just update weights (no flicker)
@@ -164,6 +169,7 @@ function PatternShape({ selectedPatternId }: { selectedPatternId?: string | null
               weight: 0,
               opacity: 1,
               pane: 'routeArrowsPane',
+              interactive: false,
             },
           }),
         }],
@@ -288,6 +294,61 @@ function MapRefSetter({ mapRef }: { mapRef: React.MutableRefObject<L.Map | null>
   return null;
 }
 
+/**
+ * Forces Leaflet to recompute its container size whenever the layout changes.
+ * Without this the map renders into a stale (sometimes 0×0) box on cold
+ * starts, after the splash fades, when the bottom panel collapses/expands,
+ * when the PWA returns from background, or when the device rotates.
+ */
+function MapSizeWatcher({ isPanelOpen, isPanelExpanded }: { isPanelOpen?: boolean; isPanelExpanded?: boolean }) {
+  const map = useMap();
+
+  // Run invalidateSize across a few microticks after mount so we catch the
+  // moment when CSS height fully resolves on iOS PWA.
+  useEffect(() => {
+    const ticks = [0, 50, 200, 500, 1200];
+    const timers = ticks.map(d => window.setTimeout(() => map.invalidateSize({ pan: false }), d));
+    return () => { timers.forEach(window.clearTimeout); };
+  }, [map]);
+
+  // Window resize + iOS rotation
+  useEffect(() => {
+    const onResize = () => map.invalidateSize({ pan: false });
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
+  }, [map]);
+
+  // PWA returning from background — iOS pauses layout while suspended
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        // Two ticks: one immediate, one after iOS finishes restoring layout
+        map.invalidateSize({ pan: false });
+        window.setTimeout(() => map.invalidateSize({ pan: false }), 250);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', onVisible);
+    };
+  }, [map]);
+
+  // Bottom panel transitions reflow the viewport — recalc after the 300ms
+  // CSS transition finishes so the map fills the new area cleanly.
+  useEffect(() => {
+    const t = window.setTimeout(() => map.invalidateSize({ pan: false }), 350);
+    return () => window.clearTimeout(t);
+  }, [map, isPanelOpen, isPanelExpanded]);
+
+  return null;
+}
+
 function SelectedStopMarker({ stop }: { stop: Stop | null }) {
   if (!stop) return null;
   const lat = Number(stop.lat);
@@ -312,6 +373,11 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop
       pane.style.zIndex = '450';
     }
   }, [map]);
+
+  // Dedicated canvas renderer with extra tolerance so finger taps near a
+  // 6–10px stop dot still register. Apple recommends 44pt targets; the visual
+  // dot stays small, only the hit area grows.
+  const stopsRenderer = useMemo(() => L.canvas({ tolerance: 12, pane: 'stopsPane' }), []);
 
   useMapEvents({
     moveend: (e) => { setBounds(e.target.getBounds()); setZoom(e.target.getZoom()); },
@@ -353,7 +419,15 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop
             key={stop.id}
             center={[lat, lon]}
             radius={markerRadius}
-            pathOptions={{ fillColor: '#FFCC00', fillOpacity: 0.9, color: isDarkMap ? '#0d1117' : '#1A1A1A', weight: borderWeight, pane: 'stopsPane' }}
+            pathOptions={{
+              fillColor: '#FFCC00',
+              fillOpacity: 0.9,
+              color: isDarkMap ? '#0d1117' : '#1A1A1A',
+              weight: borderWeight,
+              pane: 'stopsPane',
+              renderer: stopsRenderer,
+              bubblingMouseEvents: false,
+            }}
             eventHandlers={{ click: () => onStopSelect(stop) }}
           >
             <Popup closeButton={false}>
@@ -428,12 +502,14 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
     mapRef.current.flyTo(offsetLatLng, 16, { animate: true });
   };
 
-  // Calculate bottom offset for buttons based on panel state (mobile only)
-  // Panel is 55% height. When expanded: buttons above panel. When collapsed: above 80px peek.
-  const getButtonsBottom = () => {
-    if (!isPanelOpen) return 'bottom-4 md:bottom-6';
-    if (isPanelExpanded) return 'bottom-[calc(55%+1rem)] md:bottom-6';
-    return 'bottom-[calc(80px+1rem)] md:bottom-6';
+  // Bottom offset accounts for the panel state plus the iPhone's curved
+  // bottom edge. When the panel is closed (or peeking), the buttons sit
+  // just above the home indicator's safe area; when the panel is open, the
+  // panel itself covers that area so we only push above the panel.
+  const getButtonsBottomStyle = (): React.CSSProperties => {
+    if (!isPanelOpen) return { bottom: 'calc(1rem + env(safe-area-inset-bottom))' };
+    if (isPanelExpanded) return { bottom: 'calc(55% + 1rem)' };
+    return { bottom: 'calc(80px + 1rem + env(safe-area-inset-bottom))' };
   };
 
   return (
@@ -449,9 +525,11 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
         zoom={12}
         className="w-full h-full"
         zoomControl={false}
+        attributionControl={false}
         preferCanvas={true}
       >
         <MapRefSetter mapRef={mapRef} />
+        <MapSizeWatcher isPanelOpen={isPanelOpen} isPanelExpanded={isPanelExpanded} />
         <DynamicTileLayer isDarkMap={isDarkMap} />
         <UserLocationLayer onLocationFound={handleUserLocationFound} />
         <StopsCanvasLayer stops={stops} onStopSelect={handleStopSelect} isDarkMap={isDarkMap} />
@@ -462,14 +540,16 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
       </MapContainer>
 
       {/* All control buttons — OUTSIDE MapContainer for reliable React events */}
-      <div className={`absolute ${getButtonsBottom()} right-4 md:right-6 z-[1001] flex flex-col gap-3 items-center pointer-events-none transition-all duration-300`}>
+      <div
+        className="absolute right-4 md:right-6 z-[1001] flex flex-col gap-3 items-center pointer-events-none transition-all duration-300"
+        style={getButtonsBottomStyle()}
+      >
+        {/* Alerts shortcut — moved here so it stays out of the iPhone status bar */}
+        <AlertsPanel />
+
         {/* Map theme toggle */}
         <button
-          className={`pointer-events-auto w-11 h-11 rounded-full shadow-lg border flex items-center justify-center active:scale-95 transition-all ${
-            isDarkMap
-              ? 'bg-carris-gray text-white border-white/10 hover:bg-[#2A2A2A]'
-              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
-          }`}
+          className="btn-floating-dark pointer-events-auto w-11 h-11 rounded-full flex items-center justify-center text-white/95"
           onClick={onToggleMapTheme}
           title={isDarkMap ? 'Mudar para mapa claro' : 'Mudar para mapa escuro'}
         >
@@ -486,11 +566,7 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
 
         {/* Locate me */}
         <button
-          className={`pointer-events-auto w-11 h-11 rounded-full shadow-lg border flex items-center justify-center active:scale-95 transition-all ${
-            isDarkMap
-              ? 'bg-carris-gray text-carris-yellow border-white/10 hover:bg-[#2A2A2A]'
-              : 'bg-white text-carris-dark border-gray-200 hover:bg-gray-100'
-          }`}
+          className="btn-floating-dark pointer-events-auto w-11 h-11 rounded-full flex items-center justify-center text-carris-yellow"
           onClick={handleLocate}
           title="Ir para a minha localização"
         >
@@ -502,7 +578,7 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
         {/* Back to selected stop */}
         {selectedStop && (
           <button
-            className="pointer-events-auto w-11 h-11 bg-carris-yellow text-carris-dark rounded-full shadow-lg border border-white/20 flex items-center justify-center hover:brightness-110 active:scale-95 transition-all"
+            className="btn-floating-yellow pointer-events-auto w-11 h-11 text-carris-dark rounded-full flex items-center justify-center"
             onClick={handleBackToStop}
             title="Voltar à minha paragem"
           >

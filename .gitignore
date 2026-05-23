@@ -26,12 +26,15 @@ dist-ssr
 .vercel
 .env*.local
 
-# Claude Code
+# Local tooling
 .claude*
-
-# Superpowers brainstorm
 .superpowers/
 docs/superpowers/
 
 # Test data
 *.test.json
+.env*
+
+# Graphify outputs (knowledge graph artifacts)
+graphify-out/
+.graphify*

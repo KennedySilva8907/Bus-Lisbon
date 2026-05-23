@@ -3,20 +3,22 @@
 @tailwind utilities;
 
 @layer base {
+  /* The whole chain gets a concrete height so flex children can use h-full
+   * reliably. lvh = "largest viewport height" — on iOS PWA it equals the
+   * full screen including the home indicator area, unlike dvh which can
+   * exclude it and leave a dark strip at the bottom. */
   html, body, #root {
-    height: 100%;
-    height: 100dvh;
+    width: 100%;
+    height: 100vh;
+    height: 100lvh;
     overflow: hidden;
+    background-color: #1A1A1A;
   }
 
   body {
-    @apply bg-carris-dark text-carris-light font-sans antialiased m-0 p-0 overflow-hidden;
-    /* Prevent pull-to-refresh and bounce on iOS */
+    @apply bg-carris-dark text-carris-light font-sans antialiased m-0 p-0;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
-    /* Safe area for iPhone notch */
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
   }
 
   /* Prevent text selection on map controls (mobile) */
@@ -35,6 +37,12 @@
   touch-action: pan-x pan-y;
 }
 
+/* Lift the attribution out of the iPhone's curved corner so the text isn't
+ * clipped at the bottom-right radius. */
+.leaflet-bottom {
+  margin-bottom: env(safe-area-inset-bottom, 0);
+}
+
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
   @apply bg-carris-gray text-carris-light;
@@ -51,6 +59,45 @@
   background: rgba(255, 204, 0, 0.3);
   border-radius: 2px;
 }
+
+/* Obsidian glass — premium dark floating control. Reads against any map
+ * because of the blur, the 1px top highlight, and the soft black drop. */
+.btn-floating-dark {
+  background-color: rgba(18, 18, 18, 0.82);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow:
+    0 10px 30px -10px rgba(0, 0, 0, 0.7),
+    0 2px 6px -2px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+.btn-floating-dark:hover {
+  background-color: rgba(28, 28, 28, 0.9);
+  border-color: rgba(255, 204, 0, 0.42);
+  box-shadow:
+    0 12px 36px -10px rgba(0, 0, 0, 0.75),
+    0 2px 6px -2px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 0 0 1px rgba(255, 204, 0, 0.18);
+}
+.btn-floating-dark:active {
+  transform: scale(0.94);
+}
+
+/* Yellow variant — same depth recipe, Carris accent for primary actions */
+.btn-floating-yellow {
+  background-color: #FFCC00;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  box-shadow:
+    0 10px 30px -8px rgba(255, 204, 0, 0.45),
+    0 2px 6px -2px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: filter 0.2s ease, transform 0.15s ease;
+}
+.btn-floating-yellow:hover { filter: brightness(1.06); }
+.btn-floating-yellow:active { transform: scale(0.94); }
 
 /* Splash screen pulsing dots */
 .splash-dot {

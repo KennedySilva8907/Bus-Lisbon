@@ -1,54 +1,126 @@
+import { useEffect, useState } from 'react';
+
 interface SplashScreenProps {
   fading: boolean;
 }
 
+/**
+ * Splash screen — "Edge" layout.
+ *
+ * Phone: the brand artwork fills the screen edge-to-edge. A gradient lifts
+ * the bottom into pure black where the wordmark, coordinates, and progress
+ * bar sit.
+ *
+ * Larger viewports: the artwork is constrained to a centred phone-aspect
+ * column so it stays composed instead of being stretched across a landscape
+ * monitor. The surrounding area is the same Carris yellow as the artwork's
+ * top half, so the seam is invisible.
+ *
+ * Progress eases toward 92 % via a 1 − e^(−t/τ) curve while the app boots,
+ * then snaps to 100 % the moment the parent triggers the fade — the user
+ * sees a confident "done", not "cancelled mid-load".
+ */
 export default function SplashScreen({ fading }: SplashScreenProps) {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (fading) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setProgress(100);
+      return;
+    }
+    const start = Date.now();
+    const tick = () => {
+      const elapsed = (Date.now() - start) / 1000;
+      const eased = 1 - Math.exp(-elapsed / 1.6);
+      setProgress(Math.min(92, Math.round(eased * 92)));
+    };
+    tick();
+    const interval = setInterval(tick, 90);
+    return () => clearInterval(interval);
+  }, [fading]);
+
   return (
     <div
       role="status"
       aria-label="A carregar Bus Lisbon"
       aria-hidden={fading}
-      className={`fixed inset-0 z-[9999] bg-carris-dark flex flex-col items-center justify-center overflow-hidden transition-opacity duration-500 ease-out ${
+      className={`fixed inset-0 z-[9999] overflow-hidden flex items-stretch justify-center transition-opacity duration-500 ease-out ${
         fading ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
-      style={{
-        height: '100dvh',
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingBottom: 'env(safe-area-inset-bottom)',
-      }}
+      style={{ backgroundColor: '#FFCC00' }}
     >
-      {/* Glow ring behind logo */}
-      <div className="relative mb-6">
+      {/* Centred column. On phones it equals the viewport; on tablets / desktop
+        * it's a phone-aspect frame so the portrait artwork doesn't stretch. */}
+      <div
+        className="relative w-full h-full overflow-hidden"
+        style={{ maxWidth: 'min(100%, 520px)' }}
+      >
+        <img
+          src="/splash-hero.jpg"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ objectPosition: 'center 30%' }}
+          loading="eager"
+          decoding="sync"
+        />
+
+        {/* Gradient lifts the lower band into black for legibility */}
         <div
-          className="absolute -inset-4 rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(255,204,0,0.12) 0%, transparent 70%)' }}
-        ></div>
-        <div className="w-[100px] h-[100px] rounded-full overflow-hidden relative border-2 border-carris-yellow/30 shadow-[0_0_40px_rgba(255,204,0,0.1)]">
-          <img
-            src="/bus-logo.jpg"
-            alt="Bus Lisbon logo"
-            className="w-full h-full object-cover"
-            loading="eager"
-            decoding="sync"
-            width={100}
-            height={100}
-          />
+          aria-hidden="true"
+          className="absolute bottom-0 left-0 right-0 pointer-events-none"
+          style={{
+            height: '38%',
+            background:
+              'linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.78) 70%, #000 100%)',
+          }}
+        />
+
+        {/* Title stack */}
+        <div
+          className="absolute left-0 right-0 px-5 sm:px-7"
+          style={{ bottom: 'max(28px, env(safe-area-inset-bottom, 0px) + 16px)' }}
+        >
+          <div
+            className="text-white uppercase font-black"
+            style={{
+              fontSize: 'clamp(40px, 12vw, 64px)',
+              lineHeight: 0.92,
+              letterSpacing: '-0.04em',
+            }}
+          >
+            Bus
+            <br />
+            Lisbon
+          </div>
+
+          <div
+            className="mt-2.5 text-carris-yellow font-mono uppercase"
+            style={{ fontSize: 'clamp(10px, 2.5vw, 12px)', letterSpacing: '0.18em' }}
+          >
+            38.7223° N · 9.1393° W
+          </div>
+
+          <div className="mt-5 flex items-center gap-3">
+            <div className="flex-1 h-[2px] bg-white/15 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-carris-yellow"
+                style={{
+                  width: `${progress}%`,
+                  transition: 'width 360ms cubic-bezier(0.22, 1, 0.36, 1)',
+                  boxShadow: '0 0 8px rgba(255,204,0,0.5)',
+                }}
+              />
+            </div>
+            <div
+              className="font-mono text-white/65 text-right tabular-nums"
+              style={{ fontSize: 'clamp(11px, 2.5vw, 13px)', minWidth: '40px' }}
+            >
+              {progress}%
+            </div>
+          </div>
         </div>
-      </div>
-
-      {/* App name */}
-      <h1 className="font-extrabold text-[22px] text-carris-light tracking-tight">
-        Bus Lisbon
-      </h1>
-      <p className="text-[12px] text-gray-500 mt-1">
-        Carris Metropolitana em tempo real
-      </p>
-
-      {/* Pulsing dots */}
-      <div className="flex gap-1.5 items-center mt-8" aria-hidden="true">
-        <div className="w-1.5 h-1.5 rounded-full bg-carris-yellow splash-dot" style={{ animationDelay: '0s' }}></div>
-        <div className="w-1.5 h-1.5 rounded-full bg-carris-yellow splash-dot" style={{ animationDelay: '0.2s' }}></div>
-        <div className="w-1.5 h-1.5 rounded-full bg-carris-yellow splash-dot" style={{ animationDelay: '0.4s' }}></div>
       </div>
     </div>
   );

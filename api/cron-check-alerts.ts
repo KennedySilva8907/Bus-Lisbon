@@ -64,7 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     Array.from(byStop.entries()).map(async ([stopId, group]) => {
       let etas: CarrisETA[] = [];
       try {
-        const resp = await fetch(`${CARRIS_BASE}/stops/${stopId}/realtime`);
+        const resp = await fetch(`${CARRIS_BASE}/v2/arrivals/by_stop/${stopId}`);
         const json = await resp.json();
         etas = Array.isArray(json) ? json : (json.data || json.value || []);
       } catch {

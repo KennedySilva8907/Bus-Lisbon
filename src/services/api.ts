@@ -32,6 +32,9 @@ export interface Vehicle {
   heading?: number;
   trip_id: string;
   pattern_id: string;
+  // Unix seconds of the last GPS fix. Used to drop parked buses whose position
+  // is hours old (see isLiveVehicle).
+  timestamp?: number;
 }
 
 export interface ETA {
@@ -62,8 +65,28 @@ export function useStops() {
   };
 }
 
-// ── Single Vehicle (only fetches when vehicleId is set) ─
-// Uses the LIGHTER v1 endpoint (~400KB vs 1.2MB from v2)
+// ── Single Vehicle (only fetches when a vehicle/line is selected) ─
+// The /vehicles feed returns the WHOLE fleet (~1700 entries, ~1.2MB), not just
+// the buses currently on the road. Most entries are parked vehicles whose last
+// GPS fix is hours (sometimes days) old, plus a handful of metadata-only rows
+// with no position and a malformed "|undefined" id. We pull the full feed and
+// filter down to the live subset client-side — there is no server-side filter.
+
+// Drop a bus from consideration when it can't represent a vehicle in service:
+// missing/invalid coordinates, the known junk row, or a stale GPS fix. Without
+// the freshness check a "track by line" tap could lock onto a parked bus and
+// pin it to the map at a position from hours ago.
+const VEHICLE_FRESH_WINDOW_SEC = 300;
+
+function isLiveVehicle(v: Vehicle): boolean {
+  if (!v.id || v.id === '|undefined') return false;
+  const lat = Number(v.lat);
+  const lon = Number(v.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  if (lat === 0 && lon === 0) return false;
+  if (v.timestamp && Date.now() / 1000 - v.timestamp > VEHICLE_FRESH_WINDOW_SEC) return false;
+  return true;
+}
 
 export function useSingleVehicle(vehicleId: string | null, lineId?: string | null, patternId?: string | null) {
   const shouldFetch = !!(vehicleId || lineId);
@@ -78,13 +101,13 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
     }
   );
 
-  const vehicle = data
-    ? (vehicleId
-        ? data.find(v => v.id === vehicleId)
-        : lineId
-          ? data.find(v => v.line_id === lineId && (!patternId || v.pattern_id === patternId))
-          : null) || null
-    : null;
+  const liveVehicles = data ? data.filter(isLiveVehicle) : [];
+
+  const vehicle = (vehicleId
+    ? liveVehicles.find(v => v.id === vehicleId)
+    : lineId
+      ? liveVehicles.find(v => v.line_id === lineId && (!patternId || v.pattern_id === patternId))
+      : null) || null;
 
   return { vehicle, isLoading, isError: error };
 }
@@ -97,7 +120,12 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
 const lastETAFetchAt = new Map<string, number>();
 
 export function useStopETA(stopId: string | null) {
-  const key = stopId ? `${API_BASE_URL}/stops/${stopId}/realtime` : null;
+  // v2 endpoint. The legacy `/stops/:id/realtime` path still answers but was
+  // dropped from the v2 docs in favour of /arrivals/by_stop/:id (identical
+  // payload). Stops/patterns/shapes intentionally stay on the unversioned
+  // endpoints: their v2 variants currently return incomplete data (e.g.
+  // /v2/stops ships empty `name`/`locality` for every stop).
+  const key = stopId ? `${API_BASE_URL}/v2/arrivals/by_stop/${stopId}` : null;
   const { data, error, isLoading } = useSWR<ETA[]>(
     key,
     fetcher,

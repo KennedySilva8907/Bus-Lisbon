@@ -1,9 +1,8 @@
 # Bus Lisbon
 
 > Real-time bus tracker for **Carris Metropolitana** (Lisbon area), built as a
-> Progressive Web App. Live positions on a Leaflet map, per-stop ETAs that
-> stay aligned with the wall clock, and **web-push arrival alerts** that
-> behave like native iOS notifications — no account, no SMS, no cost.
+> Progressive Web App. It shows live bus positions on a Leaflet map, arrival
+> times for each stop, and web-push arrival alerts. No account, no SMS, no cost.
 
 **Live demo:** https://buslisbon.vercel.app
 
@@ -11,145 +10,119 @@
 
 ## Why I built this
 
-Carris Metropolitana publishes a clean public API but no first-party real-time
-app for casual riders. The existing apps either bury the data behind heavy UI
-or stop short of features people actually want — like *"ping me when the bus
-is 10 minutes out."*
+The official Carris Metropolitana website and app, which most people use to
+check their buses, were often down or would not load when my friends and I
+tried to use them. I noticed that even when the site was down, the public API
+was still working and returning live data. So I went ahead and started building
+my own app on top of that API, to get a reliable real-time view of the buses.
 
-I wanted a project that pushed me past the "fetch + render a list"
-boilerplate into the messier territory of:
-
-- **Mobile-first realities** (iOS PWA quirks, safe areas, background timers)
-- **Production push notifications** without a paid notification service
-- **Edge serverless** with cron-driven side effects
-- **Time-domain UX** — small details like keeping a 10-min countdown
-  visually consistent with the absolute arrival time below it
+It started simple: just showing the live bus positions on a map. Over time I
+kept adding new features as I went, like arrival times for each stop, arrival
+alerts, offline support, and a more app-like experience on mobile.
 
 ---
 
-## Feature highlights
+## Features
 
-**Map & live data**
-- Carris realtime feed polled every 5–8 s via SWR, with cache, dedup, and
-  focus/reconnect revalidation
-- Dark and light Leaflet themes (Carto + Google tile providers)
-- Custom canvas renderer with tap-tolerance so stop dots stay small visually
-  but reach Apple's 44 pt touch target
-- Selected vehicle is followed on the map; the route polyline draws on top
-  with directional arrows
-- Stop search with debounced filtering across the full ~12 k Carris stops
+**Map and live data**
+- Live Carris feed, refreshed every few seconds, with caching so it does not
+  reload data it already has
+- Dark and light map themes
+- Stop dots stay small on screen but are still easy to tap
+- The selected bus is followed on the map, with the route line drawn on top
+- Stop search across all of the roughly 12,000 Carris stops
 
-**ETA accuracy**
-- Countdown ticks every 5 s independently of the SWR refresh, so labels
-  drop smoothly instead of jumping
-- Minute math uses *clock-minute subtraction* (`HH:mm − HH:mm`) so the
-  rounded countdown always matches the absolute time shown beside it
-- "Agora" / "<1min" bands cover the last 60 s of honesty
-- A "stale data" badge appears when the realtime feed hasn't refreshed in
-  the last 30 s (iOS pauses background timers during PWA suspension)
+**Arrival times (ETAs)**
+- The countdown updates smoothly every few seconds instead of jumping
+- The minutes left always match the exact arrival time shown next to it
+- Shows "Agora" or "<1min" in the final minute
+- A "stale data" badge appears when the live feed has not refreshed recently
+  (iOS pauses timers while the app is in the background)
 
-**Web-push arrival alerts (no account required)**
-- Tap a bell on a future arrival → choose a threshold (3 / 5 / 10 / 15 min
-  or custom) → receive a push when the bus is that close
-- The `PushSubscription` endpoint *is* the identity; users never sign up
-- Threshold options are validated against the current ETA so you can't
-  schedule an unreachable alert
-- Notifications deep-link back into the app with the right stop selected
-  and the route polyline already drawn
-- Service worker broadcasts an `alert-fired` message to open tabs so the
-  bell badge clears in real time
+**Arrival alerts (no account needed)**
+- Tap a bell on a future arrival, pick how early you want to be warned
+  (3, 5, 10, 15 minutes or a custom value), and get a push notification when
+  the bus is that close
+- No sign-up: the push subscription itself identifies the device
+- You cannot set an alert that is already too late for the current arrival
+- Tapping the notification opens the app on the right stop, with the route
+  already drawn
 
-**iOS PWA polish**
-- Edge-to-edge layout using `100lvh` so the home indicator area paints
-  correctly (`100dvh` silently excludes it on iPhone)
-- Every overlay applies `env(safe-area-inset-*)` internally — the body is
-  full-bleed, the controls aren't
-- `MapSizeWatcher` calls `invalidateSize()` across multiple ticks at
-  mount, plus on `resize`, `orientationchange`, `visibilitychange`,
-  `pageshow`, and panel transitions — kills the "blank tiles after cold
-  start / notification tap / splash fade" class of bugs
-- Frosted-dark floating controls with a yellow accent ring on hover
+**iOS and mobile polish**
+- Full-screen layout that handles the iPhone safe areas correctly
+- The map re-checks its size on rotation, resize, and when you come back to
+  the app, to avoid blank map tiles
+- Floating controls with a frosted look and a yellow accent
 
-**Offline & install**
-- Service worker pre-caches stops + map tiles for offline boot
-- Add-to-home-screen onboarding when push is requested on Safari
-- Native app feel via PWA manifest (`standalone`, themed status bar,
-  splash colors)
+**Offline and install**
+- The app caches stops and map tiles so it can still open offline
+- It can be added to the home screen and behaves like a native app
 
 ---
 
-## Architecture
+## How it works (architecture)
 
 ```
-┌────────────────────┐         ┌────────────────────┐
-│  Browser / iOS PWA │         │ Carris Metropolit. │
-│  React 19 + Vite   │◄────────┤      Public API    │
-│  Tailwind + SWR    │  poll   │                    │
-│  Service Worker    │         └────────────────────┘
-│                    │
-│   PushManager      │
-└────────┬───────────┘
-         │ subscribe / list / cancel
-         ▼
-┌─────────────────────────────────────────────────────┐
-│ Vercel Functions (Node)                             │
-│  ├ /api/alerts       POST / GET                     │
-│  ├ /api/alerts/[id]  DELETE  (owner-checked)        │
-│  └ /api/cron-check-alerts                           │
-│     ↳ called every minute by cron-job.org           │
-│     ↳ polls Carris realtime, sends web-push         │
-└─────────────────────┬───────────────────────────────┘
-                      │
-                      ▼
-              ┌──────────────┐        ┌────────────────────┐
-              │ Upstash      │        │ FCM / APNs / WNS   │
-              │ Redis (KV)   │        │ (web-push)         │
-              │ free tier    │        │                    │
-              └──────────────┘        └────────────────────┘
-                                              │
-                                              ▼
++--------------------+         +--------------------+
+|  Browser / iOS PWA |         | Carris Metropolit. |
+|  React + Vite      | <-------|      Public API    |
+|  Tailwind + SWR    |  poll   |                    |
+|  Service Worker    |         +--------------------+
+|                    |
+|   PushManager      |
++---------+----------+
+          |  subscribe / list / cancel
+          v
++-----------------------------------------------------+
+| Vercel Functions (Node)                             |
+|   /api/alerts        POST / GET                     |
+|   /api/alerts/[id]   DELETE (owner-checked)         |
+|   /api/cron-check-alerts                            |
+|      called every minute by cron-job.org            |
+|      polls Carris realtime, sends web-push          |
++---------------------+-------------------------------+
+                      |
+                      v
+              +--------------+        +--------------------+
+              | Upstash      |        | web-push           |
+              | Redis (KV)   |        | (browser push)     |
+              | free tier    |        |                    |
+              +--------------+        +--------------------+
+                                              |
+                                              v
                                       Notification on
                                       the user's device
 ```
 
-Why this shape:
-- **No user accounts** — push subscription endpoints double as device IDs,
-  which removes auth, GDPR overhead, and a whole UI surface
-- **External cron** (cron-job.org) because Vercel Hobby caps cron to
-  daily; a free external service runs the once-per-minute job and posts
-  to `/api/cron-check-alerts` with a bearer token
-- **Upstash over Vercel KV** — Vercel deprecated the free KV tier;
-  Upstash's free plan covers 10 k commands/day, which is plenty here
-- **Stateless functions** — every cron tick is idempotent: it loads
-  pending alerts, filters Carris arrivals, sends pushes, and updates KV
-  in one pass
+Why it is built this way:
+- **No user accounts.** The push subscription works as the device ID, so there
+  is no login and no extra personal data to store.
+- **External cron.** A free service (cron-job.org) triggers the alert check
+  every minute, because the free Vercel plan only allows a daily cron.
+- **Upstash Redis** is used for storage because its free plan is enough for
+  this project.
+- **Stateless function.** Each run of the alert check loads the pending alerts,
+  checks Carris, sends any due notifications, and updates storage in one pass.
 
 ---
 
-## Engineering challenges worth flagging
+## Some tricky parts the app handles
 
-- **Carris realtime returns *every passage of the day* for a stop, past
-  ones included.** The cron initially matched `vehicle_id` to the first
-  occurrence and saw `minutesAway = -817` (yesterday morning's run),
-  expiring every alert instantly. The fix filters out observed-arrival
-  entries and picks the next future passage.
-- **Cron interval vs. user threshold.** A once-per-minute cron always
-  catches the bus *somewhere in a 60 s window*, so the alert fires
-  between `threshold` and `threshold + 1` minutes away. The notification
-  body shows the user's chosen threshold (`min(threshold, round(actual))`)
-  so the displayed number matches expectations and is only lower when we
-  legitimately fire late.
-- **iOS Safari pauses background timers** while the PWA is suspended,
-  including the SWR `refreshInterval` and any `setInterval`. The app
-  resyncs on `visibilitychange` and tracks a "data is N seconds old"
-  badge so users know when the prediction was last updated.
-- **iOS `100dvh` quirk.** On iPhone PWA standalone, `100dvh` excludes
-  the home indicator's safe area, leaving an ~80 px dark strip at the
-  bottom. Pinning the chain to `100vh + 100lvh` covers the full screen.
-- **Click reliability over a custom canvas.** Stop dots are drawn small
-  for visual density but receive a `tolerance: 12` canvas renderer and
-  `bubblingMouseEvents: false` so taps register reliably even when a
-  polyline passes through.
+- **Carris returns every arrival of the day for a stop, including past ones.**
+  The alert check has to skip the arrivals that already happened and use the
+  next future one. Otherwise it would think the bus passed hours ago and cancel
+  the alert immediately.
+- **The alert check runs once a minute,** so it catches the bus somewhere
+  inside a 60 second window. The notification shows the threshold you picked,
+  so the number matches what you expect.
+- **iOS pauses timers** when the app is in the background, so the data can be a
+  little old. The app re-syncs when you come back and shows how old the data is.
+- **iPhone full-height CSS quirk.** The usual full-height unit left a dark strip
+  at the bottom on iPhone, so the layout combines units to cover the whole
+  screen.
+- **Tapping small dots.** Stop dots are small for a clean look but use a click
+  tolerance so they are still easy to tap, even when a route line passes over
+  them.
 
 ---
 
@@ -157,17 +130,17 @@ Why this shape:
 
 | Layer | Choice | Notes |
 |-------|--------|-------|
-| Framework | React 19 + TypeScript | Concurrent rendering, strict mode |
-| Build | Vite 7 | Fast dev + first-class TS |
-| Styling | Tailwind CSS 3 | Custom Carris colour palette |
-| Map | Leaflet + react-leaflet | Canvas renderer for stop layer |
-| Data | SWR | revalidate-on-focus, dedup, keepPreviousData |
-| Backend | Vercel Functions (Node) | Edge-friendly, free tier |
-| Database | Upstash Redis | 10 k commands/day free |
-| Push | `web-push` lib + VAPID | No third-party service |
-| Cron | cron-job.org | Free 1-minute cadence |
+| Framework | React + TypeScript | |
+| Build | Vite | |
+| Styling | Tailwind CSS | Custom Carris colour palette |
+| Map | Leaflet + react-leaflet | Canvas renderer for the stop layer |
+| Data fetching | SWR | Caching and refresh on focus |
+| Backend | Vercel Functions (Node) | Free tier |
+| Database | Upstash Redis | Free tier |
+| Push | web-push library with VAPID | No third-party service |
+| Cron | cron-job.org | Free, runs every minute |
 | Icons | lucide-react | |
-| API | [api.carrismetropolitana.pt](https://api.carrismetropolitana.pt) | Public, no key needed |
+| API | api.carrismetropolitana.pt | Public, no key needed |
 
 ---
 
@@ -176,36 +149,36 @@ Why this shape:
 ```
 api/                       # Vercel Functions
   _lib/
-    kv.ts                  # Shared Redis client (Upstash + KV legacy fallback)
-    types.ts               # Alert / SubscriptionPayload shapes + KV keys
+    kv.ts                  # Redis client (Upstash)
+    types.ts               # Alert / subscription shapes + storage keys
   alerts/
-    index.ts               # POST  /api/alerts   GET  /api/alerts
+    index.ts               # POST /api/alerts   GET /api/alerts
     [id].ts                # DELETE /api/alerts/:id (owner check)
-  cron-check-alerts.ts     # Cron worker: polls Carris, fires web-push
-  debug-alerts.ts          # Diagnostic dump, bearer-token gated
+  cron-check-alerts.ts     # Cron worker: polls Carris, sends web-push
+  debug-alerts.ts          # Diagnostic dump (token protected)
 
 public/
-  sw.js                    # SW: tile/stop cache + push + notificationclick
+  sw.js                    # Service worker: cache + push + notification click
 
 src/
   components/
-    TrackingMap.tsx        # Leaflet map, layers, button cluster
-    StopDetailsPanel.tsx   # Bottom panel: ETAs, past arrivals, bells
-    AlertSetupModal.tsx    # Threshold picker with current-ETA validation
-    AlertsPanel.tsx        # Bell + pending list + cancel
-    NotificationBell.tsx   # Reusable bell affordance
-    SearchBar.tsx          # Stop search overlay
-    BusMarker.tsx          # Smooth-animated bus icon
+    TrackingMap.tsx        # Leaflet map, layers, buttons
+    StopDetailsPanel.tsx   # Bottom panel: arrival times, bells
+    AlertSetupModal.tsx    # Threshold picker
+    AlertsPanel.tsx        # Pending alerts list + cancel
+    NotificationBell.tsx   # Reusable bell button
+    SearchBar.tsx          # Stop search
+    BusMarker.tsx          # Animated bus icon
     SplashScreen.tsx
   services/
     api.ts                 # Carris API hooks (SWR)
-    push.ts                # VAPID + alerts API client
-    history.ts             # Local arrival-deviation tracking
+    push.ts                # Alerts API client
+    history.ts             # Local arrival tracking
   hooks/
-    useAlerts.ts           # Module-level singleton store for alerts
+    useAlerts.ts           # Alerts store
     useFavorites.ts        # Favourites in localStorage
-  App.tsx                  # Layout, splash, notification deep-link
-  index.css                # Global styles + obsidian-glass primitives
+  App.tsx                  # Layout, splash, notification handling
+  index.css                # Global styles
 ```
 
 ---
@@ -219,25 +192,22 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-For full setup of the push notifications backend (VAPID keys, Upstash, env
-vars, external cron), see [`docs/PUSH_NOTIFICATIONS_SETUP.md`](docs/PUSH_NOTIFICATIONS_SETUP.md).
+For the full setup of the push notifications backend (VAPID keys, Upstash,
+environment variables, external cron), see
+[`docs/PUSH_NOTIFICATIONS_SETUP.md`](docs/PUSH_NOTIFICATIONS_SETUP.md).
 
 ---
 
-## What I'd build next
+## What I would build next
 
-- **Reliability heatmap** — Carris arrival deviations are already tracked
-  client-side in `history.ts`; aggregating them into a per-line / per-stop
-  reliability score is a natural next surface
-- **"Any 758 here" alerts** — currently alerts pin to a specific
-  `vehicle_id`; supporting line-level alerts at a stop would smooth over
-  cases where a bus drops from the feed before reaching the threshold
-- **End-to-end tests** with Playwright against a mocked Carris fixture
-- **Multi-device sync** behind an optional account, for users who want
-  alerts to follow them across devices
+- A reliability score per line or stop, using the arrival data the app already
+  tracks
+- Line-level alerts ("any 758 here") instead of alerts tied to one specific bus
+- Automated end-to-end tests
+- Optional accounts, so alerts can follow you across devices
 
 ---
 
 ## License
 
-[MIT](LICENSE) © 2026 Kennedy Silva ([KennedySilva8907](https://github.com/KennedySilva8907))
+[MIT](LICENSE) 2026 Kennedy Silva ([KennedySilva8907](https://github.com/KennedySilva8907))

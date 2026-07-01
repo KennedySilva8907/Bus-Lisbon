@@ -1,4 +1,4 @@
-import { MapContainer, useMap, CircleMarker, Marker, Popup, useMapEvents } from 'react-leaflet';
+import { MapContainer, useMap, CircleMarker, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet-polylinedecorator';
 import { useStops, useSingleVehicle, usePatternShape, type Stop, type Vehicle } from '../services/api';
@@ -423,6 +423,10 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop
       {visibleStops.map(stop => {
         const lat = Number(stop.lat);
         const lon = Number(stop.lon);
+        // No Leaflet popup on these markers on purpose: a popup box overlaps
+        // neighbouring stops and swallows their clicks, which made it
+        // impossible to switch to a nearby stop. The side panel already shows
+        // the stop name and id.
         return (
           <CircleMarker
             key={stop.id}
@@ -438,12 +442,7 @@ const StopsCanvasLayer = memo(({ stops, onStopSelect, isDarkMap }: { stops: Stop
               bubblingMouseEvents: false,
             }}
             eventHandlers={{ click: () => onStopSelect(stop) }}
-          >
-            <Popup closeButton={false}>
-              <div className="text-center font-bold text-sm">{stop.name}</div>
-              <div className="text-xs opacity-75 text-center mt-1">{stop.id}</div>
-            </Popup>
-          </CircleMarker>
+          />
         );
       })}
     </>

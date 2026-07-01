@@ -100,6 +100,10 @@ function PatternShape({ selectedPatternId }: { selectedPatternId?: string | null
     if (!map.getPane('routeArrowsPane')) {
       const pane = map.createPane('routeArrowsPane');
       pane.style.zIndex = '410';
+      // The arrows are purely decorative. Their canvas sits above the stops
+      // canvas, so without this it swallows clicks and you can't select a stop
+      // while a route (tracked vehicle) is shown.
+      pane.style.pointerEvents = 'none';
     }
   }, [map]);
 

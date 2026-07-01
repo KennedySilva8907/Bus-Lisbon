@@ -54,7 +54,9 @@ function DynamicTileLayer({ isDarkMap }: { isDarkMap: boolean }) {
 
 const selectedStopIcon = new L.DivIcon({
   className: 'bg-transparent',
-  html: `<div class="relative w-6 h-6 flex items-center justify-center">
+  // pointer-events:none so this highlight never swallows taps meant for a
+  // different (often adjacent) stop underneath it.
+  html: `<div class="relative w-6 h-6 flex items-center justify-center" style="pointer-events:none">
     <div class="absolute w-6 h-6 bg-[#FFCC00] opacity-30 rounded-full animate-ping"></div>
     <div class="w-4 h-4 bg-[#FFCC00] rounded-full border-2 border-white shadow-lg"></div>
   </div>`,
@@ -250,7 +252,9 @@ function VehicleTracker({ vehicle, disabled, isPanelOpen, isPanelExpanded }: { v
 // Blue user location marker icon
 const userLocationIcon = new L.DivIcon({
   className: 'bg-transparent',
-  html: `<div class="relative w-8 h-8 flex items-center justify-center">
+  // pointer-events:none is critical: the blue dot often sits right on top of a
+  // nearby stop, and without this it steals the tap so the stop never opens.
+  html: `<div class="relative w-8 h-8 flex items-center justify-center" style="pointer-events:none">
     <div class="absolute w-8 h-8 bg-blue-500 opacity-20 rounded-full animate-ping"></div>
     <div class="absolute w-5 h-5 bg-blue-400/20 rounded-full"></div>
     <div class="w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-lg"></div>
@@ -289,7 +293,7 @@ function UserLocationLayer({ onLocationFound }: { onLocationFound?: (latlng: L.L
   }, [map, onLocationFound]);
 
   if (!position) return null;
-  return <Marker position={position} icon={userLocationIcon} zIndexOffset={400} />;
+  return <Marker position={position} icon={userLocationIcon} zIndexOffset={400} interactive={false} />;
 }
 
 // Exposes map instance to parent via ref
@@ -359,7 +363,7 @@ function SelectedStopMarker({ stop }: { stop: Stop | null }) {
   const lat = Number(stop.lat);
   const lon = Number(stop.lon);
   if (isNaN(lat) || isNaN(lon)) return null;
-  return <Marker position={[lat, lon]} icon={selectedStopIcon} zIndexOffset={500} />;
+  return <Marker position={[lat, lon]} icon={selectedStopIcon} zIndexOffset={500} interactive={false} />;
 }
 
 // ── Canvas-based stops layer ──────────────────────────

@@ -151,8 +151,11 @@ function App() {
         />
       </main>
 
-      {/* Bottom/Side Panel */}
-      {selectedStop ? (
+      {/* Side/bottom panel — only mounted once a stop is selected. On desktop
+          this keeps the map full-width until the user picks a stop (no empty
+          rail on the right); on mobile it's a bottom sheet that stays hidden
+          while idle. */}
+      {selectedStop && (
         <StopDetailsPanel
           stop={selectedStop}
           isExpanded={isPanelExpanded}
@@ -164,19 +167,6 @@ function App() {
           isFavorite={selectedStop ? isFavorite(selectedStop.id) : false}
           onToggleFavorite={() => selectedStop && toggleFavorite(selectedStop.id)}
         />
-      ) : (
-        <aside className="absolute bottom-0 w-full h-1/3 md:relative md:h-full md:w-96 bg-carris-gray z-[1000] shadow-2xl flex-shrink-0 flex flex-col rounded-t-3xl md:rounded-l-3xl md:rounded-tr-none transform transition-transform duration-300 translate-y-full md:translate-y-0 md:translate-x-full">
-           <div className="p-6 flex-1 text-white flex flex-col justify-center items-center text-center opacity-50">
-             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-carris-yellow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" />
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-               </svg>
-             </div>
-             <h2 className="text-xl font-bold mb-2">Selecione uma Paragem</h2>
-             <p className="text-sm text-gray-400 max-w-[200px]">Clique numa paragem no mapa ou pesquise acima para ver chegadas em tempo real.</p>
-           </div>
-        </aside>
       )}
 
     </div>

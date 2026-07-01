@@ -81,6 +81,14 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
     };
   }, [etas, nowUnix]);
 
+  // When the operator's realtime pipeline is down for an area (as during the
+  // Carris/TML GO Hub migration), the feed still returns the day's schedule but
+  // every passage comes without a vehicle and without a live estimate. Detect
+  // that so we can tell the user it's an upstream gap, not a broken app.
+  const hasRealtime = etas.some(
+    e => !!e.vehicle_id || (e.estimated_arrival_unix != null && e.estimated_arrival_unix !== e.scheduled_arrival_unix),
+  );
+
   // Record deviations for history tracking
   const futureEtaKeys = futureEtas.map(e => `${e.line_id}-${e.scheduled_arrival_unix}`).join(',');
   useEffect(() => {
@@ -215,6 +223,16 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
             </div>
           ) : (
             <>
+              {/* Realtime outage banner — the arrivals feed only has schedule
+                  data for this stop (no vehicle, no live estimate). Makes it
+                  clear the gap is on the operator's side. */}
+              {!hasRealtime && etas.length > 0 && (
+                <div className="flex items-start gap-2 mb-1 px-3 py-2.5 rounded-xl bg-orange-400/10 border border-orange-400/20 text-orange-200/90 text-[12px] leading-snug">
+                  <span className="mt-0.5 flex-shrink-0">⚠️</span>
+                  <span>Tempo real indisponível nesta zona neste momento. A mostrar apenas o horário planeado.</span>
+                </div>
+              )}
+
               {/* ── Past Arrivals Section ── */}
               {pastEtas.length > 0 && (
                 <>

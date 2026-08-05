@@ -38,3 +38,15 @@ docs/superpowers/
 # Graphify outputs (knowledge graph artifacts)
 graphify-out/
 .graphify*
+
+# Git directory committed by mistake
+.git_hidden/
+
+# .NET
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+.vs/
+artifacts/
+TestResults/

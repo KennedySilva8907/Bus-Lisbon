@@ -85,10 +85,16 @@ jobs:
           echo "Testing https://$FQDN/health"
 
           for attempt in 1 2 3 4 5 6; do
-            BODY=$(curl -fsS --max-time 30 "https://$FQDN/health") && break
-            echo "Attempt $attempt failed, waiting for cold start"
+            BODY=$(curl -fsS --max-time 30 "https://$FQDN/health" || true)
+
+            if echo "$BODY" | grep -q '"status":"healthy"'; then
+              echo "Attempt $attempt returned: $BODY"
+              exit 0
+            fi
+
+            echo "Attempt $attempt returned: ${BODY:-<empty>}"
             sleep 10
           done
 
-          echo "Response: $BODY"
-          echo "$BODY" | grep -q '"status":"healthy"'
+          echo "The health endpoint never returned the expected body"
+          exit 1

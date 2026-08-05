@@ -20,21 +20,22 @@ dist-ssr
 *.suo
 *.ntvs*
 *.njsproj
-*.sln
 *.sw?
 
 .vercel
 .env*.local
 
-# Local tooling
-.claude*
-.superpowers/
-docs/superpowers/
-
 # Test data
 *.test.json
 .env*
 
-# Graphify outputs (knowledge graph artifacts)
-graphify-out/
-.graphify*
+# Git directory committed by mistake
+.git_hidden/
+
+# .NET
+[Bb]in/
+[Oo]bj/
+*.user
+.vs/
+artifacts/
+TestResults/

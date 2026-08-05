@@ -26,18 +26,9 @@ dist-ssr
 .vercel
 .env*.local
 
-# Local tooling
-.claude*
-.superpowers/
-docs/superpowers/
-
 # Test data
 *.test.json
 .env*
-
-# Graphify outputs (knowledge graph artifacts)
-graphify-out/
-.graphify*
 
 # Git directory committed by mistake
 .git_hidden/
@@ -46,7 +37,6 @@ graphify-out/
 [Bb]in/
 [Oo]bj/
 *.user
-*.suo
 .vs/
 artifacts/
 TestResults/

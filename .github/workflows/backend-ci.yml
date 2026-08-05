@@ -28,3 +28,67 @@ jobs:
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal
         working-directory: backend
+
+  deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        run: |
+          IMAGE=ghcr.io/${{ github.repository_owner }}/buslisbon-api:${{ github.sha }}
+          IMAGE=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
+          docker build -t "$IMAGE" backend
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Sign in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Roll out the new image
+        run: |
+          az containerapp update \
+            --name ca-buslisbon-api \
+            --resource-group rg-buslisbon \
+            --image "$IMAGE" \
+            --set-env-vars ASPNETCORE_URLS=http://+:8080
+
+          az containerapp ingress update \
+            --name ca-buslisbon-api \
+            --resource-group rg-buslisbon \
+            --target-port 8080
+
+      - name: Smoke test the deployed API
+        run: |
+          FQDN=$(az containerapp show \
+            --name ca-buslisbon-api \
+            --resource-group rg-buslisbon \
+            --query properties.configuration.ingress.fqdn -o tsv)
+
+          echo "Testing https://$FQDN/health"
+
+          for attempt in 1 2 3 4 5 6; do
+            BODY=$(curl -fsS --max-time 30 "https://$FQDN/health") && break
+            echo "Attempt $attempt failed, waiting for cold start"
+            sleep 10
+          done
+
+          echo "Response: $BODY"
+          echo "$BODY" | grep -q '"status":"healthy"'

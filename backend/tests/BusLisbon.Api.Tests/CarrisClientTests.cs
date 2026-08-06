@@ -2,6 +2,7 @@ using System.Net;
 using BusLisbon.Api.Carris;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Polly.CircuitBreaker;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;
@@ -73,6 +74,24 @@ public class CarrisClientTests : IDisposable
         var client = BuildClient();
 
         await Assert.ThrowsAnyAsync<Exception>(() => client.GetVehiclesAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetVehiclesAsync_StopsCallingTheFeedOnceTheCircuitOpens()
+    {
+        _carris.Given(Request.Create().WithPath("/v2/vehicles").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(503));
+
+        var client = BuildClient();
+
+        await Assert.ThrowsAnyAsync<Exception>(() => client.GetVehiclesAsync(CancellationToken.None));
+
+        var attemptsBeforeTheBreak = _carris.LogEntries.Count();
+
+        await Assert.ThrowsAnyAsync<BrokenCircuitException>(
+            () => client.GetVehiclesAsync(CancellationToken.None));
+
+        Assert.Equal(attemptsBeforeTheBreak, _carris.LogEntries.Count());
     }
 
     [Fact]

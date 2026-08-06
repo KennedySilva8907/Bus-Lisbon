@@ -94,7 +94,9 @@ public class VehicleFilterTests
         Assert.Equal(-9.3037, vehicle.Lon);
         Assert.Equal("1209", vehicle.LineId);
         Assert.Equal("1209_1_1", vehicle.PatternId);
+        Assert.Equal("[XS3H8]1209_1_1_1000_1029_0_7", vehicle.TripId);
         Assert.Equal(302, vehicle.Bearing);
+        Assert.Equal(8.05, vehicle.Speed);
         Assert.Equal(1_786_009_950, vehicle.Timestamp);
     }
 }

@@ -8,10 +8,17 @@ public sealed class VehicleDemand(TimeProvider time, IOptions<CarrisOptions> opt
     private readonly TimeSpan _window = options.Value.DemandWindow;
 
     private long _lastRequestedAtTicks;
+    private int _subscribers;
 
     public void Register() => Volatile.Write(ref _lastRequestedAtTicks, time.GetUtcNow().UtcTicks);
 
-    public bool IsActive()
+    public void AddSubscriber() => Interlocked.Increment(ref _subscribers);
+
+    public void RemoveSubscriber() => Interlocked.Decrement(ref _subscribers);
+
+    public bool IsActive() => Volatile.Read(ref _subscribers) > 0 || WasRequestedRecently();
+
+    private bool WasRequestedRecently()
     {
         var lastRequestedAtTicks = Volatile.Read(ref _lastRequestedAtTicks);
 
@@ -20,8 +27,6 @@ public sealed class VehicleDemand(TimeProvider time, IOptions<CarrisOptions> opt
             return false;
         }
 
-        var lastRequestedAt = new DateTimeOffset(lastRequestedAtTicks, TimeSpan.Zero);
-
-        return time.GetUtcNow() - lastRequestedAt <= _window;
+        return time.GetUtcNow() - new DateTimeOffset(lastRequestedAtTicks, TimeSpan.Zero) <= _window;
     }
 }

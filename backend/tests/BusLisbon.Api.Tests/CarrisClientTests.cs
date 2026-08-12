@@ -116,7 +116,7 @@ public class CarrisClientTests : IDisposable
         await BuildClient().GetVehiclesAsync(CancellationToken.None);
 
         var request = Assert.Single(_carris.LogEntries);
-        var header = Assert.Single(request.RequestMessage.Headers!,
+        var header = Assert.Single(request.RequestMessage!.Headers!,
             h => string.Equals(h.Key, "accept-encoding", StringComparison.OrdinalIgnoreCase));
         Assert.Contains("gzip", string.Join(',', header.Value), StringComparison.OrdinalIgnoreCase);
     }

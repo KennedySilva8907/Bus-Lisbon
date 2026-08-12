@@ -53,6 +53,41 @@ public class CarrisPollerTests
     }
 
     [Fact]
+    public void IsActive_IsTrueWhileASubscriberIsConnectedNoMatterHowLong()
+    {
+        var time = new FakeTimeProvider(Start);
+        var demand = new VehicleDemand(time, Options.Create(new CarrisOptions()));
+
+        demand.AddSubscriber();
+        time.Advance(TimeSpan.FromHours(1));
+
+        Assert.True(demand.IsActive());
+    }
+
+    [Fact]
+    public void IsActive_StaysTrueWhileOneOfTwoSubscribersRemains()
+    {
+        var demand = new VehicleDemand(new FakeTimeProvider(Start), Options.Create(new CarrisOptions()));
+
+        demand.AddSubscriber();
+        demand.AddSubscriber();
+        demand.RemoveSubscriber();
+
+        Assert.True(demand.IsActive());
+    }
+
+    [Fact]
+    public void IsActive_GoesFalseWhenTheLastSubscriberLeaves()
+    {
+        var demand = new VehicleDemand(new FakeTimeProvider(Start), Options.Create(new CarrisOptions()));
+
+        demand.AddSubscriber();
+        demand.RemoveSubscriber();
+
+        Assert.False(demand.IsActive());
+    }
+
+    [Fact]
     public async Task PollOnceAsync_DoesNotTouchCarrisWhileNobodyIsWatching()
     {
         var (poller, client, _, _) = Build();

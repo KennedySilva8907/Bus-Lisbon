@@ -23,6 +23,16 @@ public sealed class VehicleGateway(
         return snapshot is not null && snapshot.ById.TryGetValue(id, out var vehicle) ? vehicle : null;
     }
 
+    public async Task<Vehicle?> GetVehicleByLineAsync(
+        string lineId, string? patternId, CancellationToken cancellationToken)
+    {
+        var snapshot = await EnsureFreshAsync(cancellationToken);
+
+        return snapshot?.All.FirstOrDefault(vehicle =>
+            vehicle.LineId == lineId
+            && (string.IsNullOrEmpty(patternId) || vehicle.PatternId == patternId));
+    }
+
     public async Task<VehicleGatewayStatus> GetStatusAsync(CancellationToken cancellationToken)
     {
         var snapshot = await EnsureFreshAsync(cancellationToken);

@@ -15,6 +15,31 @@ public static class VehicleEndpoints
             CancellationToken cancellationToken) =>
             Results.Ok(await gateway.GetStatusAsync(cancellationToken)));
 
+        vehicles.MapGet("/by-line/{lineId}", async (
+            string lineId,
+            string? patternId,
+            VehicleGateway gateway,
+            VehicleDemand demand,
+            CancellationToken cancellationToken) =>
+        {
+            demand.Register();
+
+            var status = await gateway.GetStatusAsync(cancellationToken);
+
+            if (status.AgeSeconds is not { } age)
+            {
+                return Results.Problem(
+                    "The vehicle feed has not been read successfully yet",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            var vehicle = await gateway.GetVehicleByLineAsync(lineId, patternId, cancellationToken);
+
+            return vehicle is null
+                ? Results.NotFound()
+                : Results.Ok(new VehicleResponse(vehicle, age, status.Stale));
+        });
+
         vehicles.MapGet("/{id}", async (
             string id,
             VehicleGateway gateway,

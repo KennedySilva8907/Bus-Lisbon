@@ -44,6 +44,44 @@ public class VehicleEndpointsTests : IClassFixture<VehicleApiFactory>
     }
 
     [Fact]
+    public async Task GetVehicleByLine_ReturnsTheFirstLiveVehicleOnThatLine()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/vehicles/by-line/1209");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<VehicleResponseBody>();
+
+        Assert.NotNull(body);
+        Assert.Equal("41|300", body!.Vehicle.Id);
+        Assert.Equal("1209", body.Vehicle.LineId);
+    }
+
+    [Fact]
+    public async Task GetVehicleByLine_NarrowsByPatternWhenOneIsGiven()
+    {
+        var client = _factory.CreateClient();
+
+        var matching = await client.GetAsync("/api/vehicles/by-line/1209?patternId=1209_1_1");
+        var missing = await client.GetAsync("/api/vehicles/by-line/1209?patternId=1209_0_9");
+
+        Assert.Equal(HttpStatusCode.OK, matching.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetVehicleByLine_ReturnsNotFoundForALineWithNobodyOnIt()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/vehicles/by-line/9999");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task GetStatus_ReportsTheLiveVehicleCount()
     {
         var client = _factory.CreateClient();
@@ -56,7 +94,7 @@ public class VehicleEndpointsTests : IClassFixture<VehicleApiFactory>
 
     private sealed record VehicleResponseBody(VehicleBody Vehicle, double AgeSeconds, bool Stale);
 
-    private sealed record VehicleBody(string Id, double Lat, double Lon, string? LineId);
+    private sealed record VehicleBody(string Id, double Lat, double Lon, string? LineId, string? PatternId);
 
     private sealed record StatusBody(int LiveVehicles, double? AgeSeconds, bool Stale);
 }

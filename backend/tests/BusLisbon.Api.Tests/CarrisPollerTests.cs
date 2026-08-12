@@ -1,4 +1,5 @@
 using BusLisbon.Api.Carris;
+using BusLisbon.Api.Realtime;
 using BusLisbon.Api.Vehicles;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -116,7 +117,8 @@ public class CarrisPollerTests
         var client = new CountingCarrisClient();
         var demand = new VehicleDemand(time, options);
         var gateway = new VehicleGateway(client, time, options, NullLogger<VehicleGateway>.Instance);
-        var poller = new CarrisPoller(gateway, demand, time, options, NullLogger<CarrisPoller>.Instance);
+        var poller = new CarrisPoller(gateway, demand, new SilentBroadcaster(), time, options,
+            NullLogger<CarrisPoller>.Instance);
 
         return (poller, client, time, demand);
     }
@@ -133,5 +135,10 @@ public class CarrisPollerTests
 
             return Task.FromResult<IReadOnlyList<CarrisVehicle>>([]);
         }
+    }
+
+    private sealed class SilentBroadcaster : IVehicleBroadcaster
+    {
+        public Task PublishChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

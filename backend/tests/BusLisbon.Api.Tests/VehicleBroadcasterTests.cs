@@ -52,7 +52,7 @@ public class VehicleBroadcasterTests
             NullLogger<VehicleGateway>.Instance);
         var subscriptions = new VehicleSubscriptions();
         var sender = new RecordingSender();
-        var broadcaster = new VehicleBroadcaster(gateway, subscriptions, sender, time,
+        var broadcaster = new VehicleBroadcaster(gateway, subscriptions, sender,
             NullLogger<VehicleBroadcaster>.Instance);
 
         return (broadcaster, subscriptions, sender, time);

@@ -24,7 +24,6 @@ public sealed class VehicleBroadcaster(
     VehicleGateway gateway,
     VehicleSubscriptions subscriptions,
     IVehicleSender sender,
-    TimeProvider time,
     ILogger<VehicleBroadcaster> logger) : IVehicleBroadcaster
 {
     public async Task PublishChangesAsync(CancellationToken cancellationToken)

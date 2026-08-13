@@ -1,4 +1,5 @@
 using BusLisbon.Api.Carris;
+using BusLisbon.Api.Realtime;
 using Microsoft.Extensions.Options;
 
 namespace BusLisbon.Api.Vehicles;
@@ -6,6 +7,7 @@ namespace BusLisbon.Api.Vehicles;
 public sealed class CarrisPoller(
     VehicleGateway gateway,
     VehicleDemand demand,
+    IVehicleBroadcaster broadcaster,
     TimeProvider time,
     IOptions<CarrisOptions> options,
     ILogger<CarrisPoller> logger) : BackgroundService
@@ -31,5 +33,6 @@ public sealed class CarrisPoller(
         }
 
         await gateway.RefreshAsync(cancellationToken);
+        await broadcaster.PublishChangesAsync(cancellationToken);
     }
 }

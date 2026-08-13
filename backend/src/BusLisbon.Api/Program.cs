@@ -10,6 +10,8 @@ CarrisClient.AddCarrisClient(builder.Services, builder.Configuration);
 builder.Services.AddSingleton<VehicleGateway>();
 builder.Services.AddSingleton<VehicleDemand>();
 builder.Services.AddSingleton<VehicleSubscriptions>();
+builder.Services.AddSingleton<IVehicleSender, SignalRVehicleSender>();
+builder.Services.AddSingleton<IVehicleBroadcaster, VehicleBroadcaster>();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<CarrisPoller>();
 

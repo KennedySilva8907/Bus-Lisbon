@@ -1,4 +1,5 @@
 using BusLisbon.Api.Carris;
+using BusLisbon.Api.Realtime;
 using BusLisbon.Api.Vehicles;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -90,7 +91,7 @@ public class CarrisPollerTests
     [Fact]
     public async Task PollOnceAsync_DoesNotTouchCarrisWhileNobodyIsWatching()
     {
-        var (poller, client, _, _) = Build();
+        var (poller, client, _, _, _) = Build();
 
         await poller.PollOnceAsync(CancellationToken.None);
 
@@ -100,7 +101,7 @@ public class CarrisPollerTests
     [Fact]
     public async Task PollOnceAsync_FetchesWhileSomebodyIsWatching()
     {
-        var (poller, client, _, demand) = Build();
+        var (poller, client, _, demand, _) = Build();
 
         demand.Register();
 
@@ -109,16 +110,40 @@ public class CarrisPollerTests
         Assert.Equal(1, client.Calls);
     }
 
-    private static (CarrisPoller Poller, CountingCarrisClient Client, FakeTimeProvider Time, VehicleDemand Demand) Build()
+    [Fact]
+    public async Task PollOnceAsync_PublishesChangesWhileSomebodyIsWatching()
+    {
+        var (poller, _, _, demand, broadcaster) = Build();
+
+        demand.Register();
+
+        await poller.PollOnceAsync(CancellationToken.None);
+
+        Assert.Equal(1, broadcaster.Publishes);
+    }
+
+    [Fact]
+    public async Task PollOnceAsync_DoesNotPublishWhileNobodyIsWatching()
+    {
+        var (poller, _, _, _, broadcaster) = Build();
+
+        await poller.PollOnceAsync(CancellationToken.None);
+
+        Assert.Equal(0, broadcaster.Publishes);
+    }
+
+    private static (CarrisPoller Poller, CountingCarrisClient Client, FakeTimeProvider Time, VehicleDemand Demand, CountingBroadcaster Broadcaster) Build()
     {
         var time = new FakeTimeProvider(Start);
         var options = Options.Create(new CarrisOptions());
         var client = new CountingCarrisClient();
         var demand = new VehicleDemand(time, options);
         var gateway = new VehicleGateway(client, time, options, NullLogger<VehicleGateway>.Instance);
-        var poller = new CarrisPoller(gateway, demand, time, options, NullLogger<CarrisPoller>.Instance);
+        var broadcaster = new CountingBroadcaster();
+        var poller = new CarrisPoller(gateway, demand, broadcaster, time, options,
+            NullLogger<CarrisPoller>.Instance);
 
-        return (poller, client, time, demand);
+        return (poller, client, time, demand, broadcaster);
     }
 
     private sealed class CountingCarrisClient : ICarrisClient
@@ -132,6 +157,18 @@ public class CarrisPollerTests
             Interlocked.Increment(ref _calls);
 
             return Task.FromResult<IReadOnlyList<CarrisVehicle>>([]);
+        }
+    }
+
+    private sealed class CountingBroadcaster : IVehicleBroadcaster
+    {
+        public int Publishes { get; private set; }
+
+        public Task PublishChangesAsync(CancellationToken cancellationToken)
+        {
+            Publishes++;
+
+            return Task.CompletedTask;
         }
     }
 }

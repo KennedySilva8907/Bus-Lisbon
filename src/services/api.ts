@@ -154,12 +154,13 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
 const lastETAFetchAt = new Map<string, number>();
 
 export function useStopETA(stopId: string | null) {
-  // v2 endpoint. The legacy `/stops/:id/realtime` path still answers but was
-  // dropped from the v2 docs in favour of /arrivals/by_stop/:id (identical
-  // payload). Stops/patterns/shapes intentionally stay on the unversioned
-  // endpoints: their v2 variants currently return incomplete data (e.g.
-  // /v2/stops ships empty `name`/`locality` for every stop).
-  const key = stopId ? `${API_BASE_URL}/v2/arrivals/by_stop/${stopId}` : null;
+  // The unversioned endpoint, not /v2/arrivals/by_stop. The v2 one is the
+  // documented replacement and the payload is shaped the same, but since the
+  // operator refactored it in August 2026 it mostly answers 502, and when it
+  // does answer the estimates are hours stale and `line_id` arrives with a
+  // trip prefix glued on. Stops/patterns/shapes stay unversioned for their own
+  // reason: /v2/stops ships empty `name`/`locality` for every stop.
+  const key = stopId ? `${API_BASE_URL}/stops/${stopId}/realtime` : null;
   const { data, error, isLoading } = useSWR<ETA[]>(
     key,
     fetcher,

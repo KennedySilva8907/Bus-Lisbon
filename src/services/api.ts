@@ -1,4 +1,5 @@
 import useSWR from 'swr';
+import { GATEWAY_BASE, isGatewayEnabled, toVehicle, gatewayVehicleUrl, type GatewayVehicleResponse } from './gateway';
 
 const API_BASE_URL = 'https://api.carrismetropolitana.pt';
 
@@ -90,18 +91,38 @@ function isLiveVehicle(v: Vehicle): boolean {
 
 export function useSingleVehicle(vehicleId: string | null, lineId?: string | null, patternId?: string | null) {
   const shouldFetch = !!(vehicleId || lineId);
-  const { data, error, isLoading } = useSWR<Vehicle[]>(
-    shouldFetch ? `${API_BASE_URL}/v2/vehicles` : null,
-    fetcher,
-    {
-      refreshInterval: shouldFetch ? 8000 : 0,
-      revalidateOnFocus: false,
-      dedupingInterval: 7000,
-      keepPreviousData: true,
-    }
+  const gatewayUrl = isGatewayEnabled()
+    ? gatewayVehicleUrl(GATEWAY_BASE, vehicleId, lineId, patternId)
+    : null;
+
+  // One bus from our own API is ~250 bytes; the Carris feed is ~160 KB every
+  // time. The fleet path stays as the fallback for when the gateway is off.
+  const gateway = useSWR<GatewayVehicleResponse | null>(
+    gatewayUrl,
+    async (url: string) => {
+      const res = await fetch(url);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`gateway ${res.status}`);
+      return res.json();
+    },
+    { refreshInterval: 8000, revalidateOnFocus: false, dedupingInterval: 7000, keepPreviousData: true }
   );
 
-  const liveVehicles = data ? data.filter(isLiveVehicle) : [];
+  const fleet = useSWR<Vehicle[]>(
+    shouldFetch && !gatewayUrl ? `${API_BASE_URL}/v2/vehicles` : null,
+    fetcher,
+    { refreshInterval: 8000, revalidateOnFocus: false, dedupingInterval: 7000, keepPreviousData: true }
+  );
+
+  if (gatewayUrl) {
+    return {
+      vehicle: gateway.data ? toVehicle(gateway.data) : null,
+      isLoading: gateway.isLoading,
+      isError: gateway.error,
+    };
+  }
+
+  const liveVehicles = fleet.data ? fleet.data.filter(isLiveVehicle) : [];
 
   const vehicle = (vehicleId
     ? liveVehicles.find(v => v.id === vehicleId)
@@ -109,7 +130,7 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
       ? liveVehicles.find(v => v.line_id === lineId && (!patternId || v.pattern_id === patternId))
       : null) || null;
 
-  return { vehicle, isLoading, isError: error };
+  return { vehicle, isLoading: fleet.isLoading, isError: fleet.error };
 }
 
 // ── ETAs ───────────────────────────────────────────────

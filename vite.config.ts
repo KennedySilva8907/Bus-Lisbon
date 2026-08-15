@@ -1,7 +1,21 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  server: {
+    proxy: {
+      '/gw': {
+        target: 'http://localhost:5199',
+        changeOrigin: true,
+        ws: true,
+        rewrite: (path) => path.replace(/^\/gw/, ''),
+      },
+    },
+  },
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts'],
+  },
 })

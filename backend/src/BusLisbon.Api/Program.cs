@@ -6,6 +6,11 @@ using BusLisbon.Api.Vehicles;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
+    .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
+    .AllowAnyHeader()
+    .AllowAnyMethod()
+    .AllowCredentials()));
 CarrisClient.AddCarrisClient(builder.Services, builder.Configuration);
 builder.Services.AddSingleton<VehicleGateway>();
 builder.Services.AddSingleton<VehicleDemand>();
@@ -16,6 +21,8 @@ builder.Services.AddSignalR();
 builder.Services.AddHostedService<CarrisPoller>();
 
 var app = builder.Build();
+
+app.UseCors();
 
 app.MapHealthEndpoints();
 app.MapVehicleEndpoints();

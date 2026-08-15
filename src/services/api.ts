@@ -1,5 +1,6 @@
 import useSWR from 'swr';
 import { GATEWAY_BASE, isGatewayEnabled, toVehicle, gatewayVehicleUrl, type GatewayVehicleResponse } from './gateway';
+import { useVehicleStream } from './realtime';
 
 const API_BASE_URL = 'https://api.carrismetropolitana.pt';
 
@@ -95,8 +96,15 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
     ? gatewayVehicleUrl(GATEWAY_BASE, vehicleId, lineId, patternId)
     : null;
 
+  const stream = useVehicleStream(
+    gatewayUrl ? vehicleId : null,
+    gatewayUrl ? lineId : null,
+    patternId
+  );
+
   // One bus from our own API is ~250 bytes; the Carris feed is ~160 KB every
-  // time. The fleet path stays as the fallback for when the gateway is off.
+  // time. While the stream is up this poll goes idle and only paints the first
+  // position; when the stream drops it comes straight back.
   const gateway = useSWR<GatewayVehicleResponse | null>(
     gatewayUrl,
     async (url: string) => {
@@ -105,7 +113,12 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
       if (!res.ok) throw new Error(`gateway ${res.status}`);
       return res.json();
     },
-    { refreshInterval: 8000, revalidateOnFocus: false, dedupingInterval: 7000, keepPreviousData: true }
+    {
+      refreshInterval: stream.connected ? 0 : 8000,
+      revalidateOnFocus: false,
+      dedupingInterval: 7000,
+      keepPreviousData: true,
+    }
   );
 
   const fleet = useSWR<Vehicle[]>(
@@ -116,8 +129,8 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
 
   if (gatewayUrl) {
     return {
-      vehicle: gateway.data ? toVehicle(gateway.data) : null,
-      isLoading: gateway.isLoading,
+      vehicle: stream.vehicle ?? (gateway.data ? toVehicle(gateway.data) : null),
+      isLoading: gateway.isLoading && !stream.vehicle,
       isError: gateway.error,
     };
   }

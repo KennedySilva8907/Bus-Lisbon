@@ -38,6 +38,7 @@
     "check:api": "node scripts/api-contract-check.mjs"
   },
   "dependencies": {
+    "@microsoft/signalr": "^10.0.11",
     "@types/leaflet": "^1.9.21",
     "@types/web-push": "^3.6.4",
     "@upstash/redis": "^1.38.0",

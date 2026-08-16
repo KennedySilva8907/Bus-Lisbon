@@ -1,6 +1,6 @@
 import useSWR from 'swr';
 import { GATEWAY_BASE, isGatewayEnabled, toVehicle, gatewayVehicleUrl, type GatewayVehicleResponse } from './gateway';
-import { useVehicleStream } from './realtime';
+import { freshestVehicle, useVehicleStream } from './realtime';
 
 const API_BASE_URL = 'https://api.carrismetropolitana.pt';
 
@@ -104,7 +104,7 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
 
   // One bus from our own API is ~250 bytes; the Carris feed is ~160 KB every
   // time. While the stream is up this poll goes idle and only paints the first
-  // position; when the stream drops it comes straight back.
+  // position; when the stream drops it comes back and takes over again.
   const gateway = useSWR<GatewayVehicleResponse | null>(
     gatewayUrl,
     async (url: string) => {
@@ -129,7 +129,11 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
 
   if (gatewayUrl) {
     return {
-      vehicle: stream.vehicle ?? (gateway.data ? toVehicle(gateway.data) : null),
+      vehicle: freshestVehicle(
+        stream.vehicle,
+        stream.connected,
+        gateway.data ? toVehicle(gateway.data) : null
+      ),
       isLoading: gateway.isLoading && !stream.vehicle,
       isError: gateway.error,
     };

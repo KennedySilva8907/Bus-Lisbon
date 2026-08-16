@@ -1,4 +1,5 @@
 import { useStopETA, type Stop, type ETA } from '../services/api';
+import { describeArrival } from '../services/arrivals';
 import { fromUnixTime } from 'date-fns';
 import { X, Star, ChevronUp } from 'lucide-react';
 import { useRef, useEffect, useState, useMemo } from 'react';
@@ -13,13 +14,12 @@ interface StopDetailsPanelProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   selectedVehicleId?: string | null;
-  selectedPatternId?: string | null;
   onVehicleSelect?: (vehicleId: string | null, patternId?: string, lineId?: string) => void;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
 }
 
-export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleExpand, selectedVehicleId, selectedPatternId, onVehicleSelect, isFavorite, onToggleFavorite }: StopDetailsPanelProps) {
+export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleExpand, selectedVehicleId, onVehicleSelect, isFavorite, onToggleFavorite }: StopDetailsPanelProps) {
   const { etas, lastUpdated, isLoading } = useStopETA(stop?.id || null);
   const panelRef = useRef<HTMLElement>(null);
   const touchRef = useRef({ startY: 0, isDragging: false, isOnHandle: false });
@@ -366,12 +366,10 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                   // computes "arrival_min − current_min". Matching that math
                   // here keeps both numbers consistent — see #ETA-display.
                   const diffMinutes = Math.floor(time / 60) - Math.floor(nowUnix / 60);
-                  const hasVehicle = !!eta.vehicle_id;
-                  const hasEstimate = !hasVehicle && !!eta.estimated_arrival_unix && eta.estimated_arrival_unix !== eta.scheduled_arrival_unix;
-                  const isTracked = hasVehicle || hasEstimate;
-                  const isSelected = hasVehicle
-                    ? selectedVehicleId === eta.vehicle_id
-                    : !selectedVehicleId && selectedPatternId === eta.pattern_id;
+                  const arrival = describeArrival(eta);
+                  const hasVehicle = arrival.trackable;
+                  const isTracked = arrival.state !== 'scheduled';
+                  const isSelected = hasVehicle && selectedVehicleId === eta.vehicle_id;
 
                   let directionLabel = '';
                   let directionColor = 'text-gray-400';
@@ -400,17 +398,17 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                   return (
                     <div
                       key={`future-${eta.vehicle_id || eta.line_id}-${i}`}
-                      onClick={() => {
-                        if (onVehicleSelect) {
-                          onVehicleSelect(eta.vehicle_id || null, eta.pattern_id, eta.line_id);
-                        }
-                      }}
-                      className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer active:scale-[0.98] ${
+                      onClick={hasVehicle && onVehicleSelect
+                        ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id)
+                        : undefined}
+                      className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
+                        hasVehicle ? 'cursor-pointer active:scale-[0.98]' : ''
+                      } ${
                         isSelected
                           ? 'bg-carris-yellow/10 border-carris-yellow/40 ring-1 ring-carris-yellow/30'
-                          : isTracked
+                          : hasVehicle
                             ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/5'
-                            : 'bg-white/[0.02] hover:bg-white/[0.05] border-white/[0.03]'
+                            : 'bg-white/[0.02] border-white/[0.03]'
                       }`}
                     >
                       <div className="flex-shrink-0 w-14 text-center">
@@ -427,20 +425,20 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                       <div className="flex-1 min-w-0">
                         <div className="font-semibold text-[13px] truncate leading-tight">{eta.headsign}</div>
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          {hasVehicle ? (
+                          {arrival.state === 'boarding' ? (
                             <>
                               <span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0"></span>
-                              <span className="text-[11px] text-gray-400 truncate">Em viagem</span>
+                              <span className="text-[11px] text-gray-400 truncate">{arrival.label}</span>
                             </>
-                          ) : hasEstimate ? (
+                          ) : arrival.state === 'predicted' ? (
                             <>
                               <span className="inline-block w-1.5 h-1.5 bg-carris-yellow rounded-full flex-shrink-0"></span>
-                              <span className="text-[11px] text-carris-yellow/70 truncate">Previsto</span>
+                              <span className="text-[11px] text-carris-yellow/70 truncate">{arrival.label}</span>
                             </>
                           ) : (
                             <>
                               <span className="inline-block w-1.5 h-1.5 bg-gray-500 rounded-full flex-shrink-0"></span>
-                              <span className="text-[11px] text-gray-500">Agendado</span>
+                              <span className="text-[11px] text-gray-500 truncate">{arrival.label}</span>
                             </>
                           )}
                           {directionLabel && (

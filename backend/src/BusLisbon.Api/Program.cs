@@ -19,6 +19,7 @@ builder.Services.AddSingleton<VehicleSubscriptions>();
 builder.Services.AddSingleton<IVehicleSender, SignalRVehicleSender>();
 builder.Services.AddSingleton<IVehicleBroadcaster, VehicleBroadcaster>();
 builder.Services.Configure<AlertOptions>(builder.Configuration.GetSection(AlertOptions.SectionName));
+builder.Services.Configure<DiagnosticsOptions>(builder.Configuration.GetSection(DiagnosticsOptions.SectionName));
 UpstashKeyValueStore.AddUpstash(builder.Services, builder.Configuration);
 builder.Services.AddScoped<AlertStore>();
 builder.Services.AddSignalR();
@@ -31,6 +32,7 @@ app.UseCors();
 app.MapHealthEndpoints();
 app.MapVehicleEndpoints();
 app.MapAlertEndpoints();
+app.MapAlertDiagnosticsEndpoints();
 app.MapHub<VehicleHub>("/hubs/vehicles");
 
 app.Run();

@@ -47,13 +47,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push image
+      - name: Build and push the API image
         run: |
           IMAGE=ghcr.io/${{ github.repository_owner }}/buslisbon-api:${{ github.sha }}
           IMAGE=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
-          docker build -t "$IMAGE" backend
+          docker build --target runtime -t "$IMAGE" backend
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Build and push the alert job image
+        run: |
+          JOB_IMAGE=ghcr.io/${{ github.repository_owner }}/buslisbon-alertjob:${{ github.sha }}
+          JOB_IMAGE=$(echo "$JOB_IMAGE" | tr '[:upper:]' '[:lower:]')
+          docker build --target job -t "$JOB_IMAGE" backend
+          docker push "$JOB_IMAGE"
+          echo "JOB_IMAGE=$JOB_IMAGE" >> "$GITHUB_ENV"
 
       - name: Sign in to Azure
         uses: azure/login@v2
@@ -74,6 +82,14 @@ jobs:
             --name ca-buslisbon-api \
             --resource-group rg-buslisbon \
             --target-port 8080
+
+      - name: Roll out the alert job image
+        run: |
+          if az containerapp job show --name cj-buslisbon-alerts --resource-group rg-buslisbon >/dev/null 2>&1; then
+            az containerapp job update               --name cj-buslisbon-alerts               --resource-group rg-buslisbon               --image "$JOB_IMAGE"
+          else
+            echo "The alert job has not been created yet, leaving the image in the registry"
+          fi
 
       - name: Smoke test the deployed API
         run: |

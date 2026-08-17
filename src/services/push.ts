@@ -4,8 +4,9 @@
  * device identity.
  */
 
+import { GATEWAY_BASE } from './gateway';
+
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
-const API_BASE = import.meta.env.VITE_API_BASE || ''; // same origin in production
 
 export type AlertStatus = 'pending' | 'fired' | 'expired' | 'cancelled';
 
@@ -140,7 +141,7 @@ export interface CreateAlertInput {
 }
 
 export async function createAlert(sub: PushSubscription, input: CreateAlertInput): Promise<Alert> {
-  const res = await fetch(`${API_BASE}/api/alerts`, {
+  const res = await fetch(`${GATEWAY_BASE}/api/alerts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ subscription: serializeSubscription(sub), ...input }),
@@ -153,13 +154,13 @@ export async function createAlert(sub: PushSubscription, input: CreateAlertInput
 }
 
 export async function listAlerts(endpoint: string): Promise<Alert[]> {
-  const res = await fetch(`${API_BASE}/api/alerts?endpoint=${encodeURIComponent(endpoint)}`);
+  const res = await fetch(`${GATEWAY_BASE}/api/alerts?endpoint=${encodeURIComponent(endpoint)}`);
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function cancelAlert(id: string, endpoint: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/alerts/${id}?endpoint=${encodeURIComponent(endpoint)}`, {
+  const res = await fetch(`${GATEWAY_BASE}/api/alerts/${id}?endpoint=${encodeURIComponent(endpoint)}`, {
     method: 'DELETE',
   });
   if (!res.ok && res.status !== 404) {

@@ -9,7 +9,7 @@ using Polly.Retry;
 
 namespace BusLisbon.Api.Carris;
 
-public sealed class CarrisClient(HttpClient http) : ICarrisClient
+public sealed class CarrisClient(HttpClient http) : ICarrisClient, ICarrisArrivals
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -24,16 +24,35 @@ public sealed class CarrisClient(HttpClient http) : ICarrisClient
         return vehicles ?? throw new CarrisFeedException("The vehicles feed returned no array");
     }
 
+    public async Task<IReadOnlyList<CarrisArrival>> GetArrivalsAsync(
+        string stopId, CancellationToken cancellationToken)
+    {
+        var arrivals = await http.GetFromJsonAsync<List<CarrisArrival>>(
+            $"/stops/{Uri.EscapeDataString(stopId)}/realtime", SerializerOptions, cancellationToken);
+
+        return arrivals ?? throw new CarrisFeedException($"The arrivals feed for stop {stopId} returned no array");
+    }
+
     public static IServiceCollection AddCarrisClient(IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<CarrisOptions>(configuration.GetSection(CarrisOptions.SectionName));
 
-        services.AddHttpClient<ICarrisClient, CarrisClient>((provider, client) =>
-            {
-                var options = provider.GetRequiredService<IOptions<CarrisOptions>>().Value;
-                client.BaseAddress = new Uri(options.BaseUrl);
-                client.Timeout = TimeSpan.FromSeconds(30);
-            })
+        Configure(services.AddHttpClient<ICarrisClient, CarrisClient>(Connect));
+        Configure(services.AddHttpClient<ICarrisArrivals, CarrisClient>(Connect));
+
+        return services;
+    }
+
+    private static void Connect(IServiceProvider provider, HttpClient client)
+    {
+        var options = provider.GetRequiredService<IOptions<CarrisOptions>>().Value;
+
+        client.BaseAddress = new Uri(options.BaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(30);
+    }
+
+    private static void Configure(IHttpClientBuilder builder) =>
+        builder
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
             {
                 AutomaticDecompression = DecompressionMethods.All,
@@ -57,9 +76,6 @@ public sealed class CarrisClient(HttpClient http) : ICarrisClient
                     BreakDuration = TimeSpan.FromSeconds(30)
                 });
             });
-
-        return services;
-    }
 }
 
 public sealed class CarrisFeedException(string message) : Exception(message);

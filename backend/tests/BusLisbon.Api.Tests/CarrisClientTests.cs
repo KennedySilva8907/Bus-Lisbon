@@ -18,6 +18,21 @@ public class CarrisClientTests : IDisposable
 
     private readonly WireMockServer _carris = WireMockServer.Start();
 
+    private ICarrisArrivals BuildArrivals()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Carris:BaseUrl"] = _carris.Url
+            })
+            .Build();
+
+        CarrisClient.AddCarrisClient(services, configuration);
+
+        return services.BuildServiceProvider().GetRequiredService<ICarrisArrivals>();
+    }
+
     private ICarrisClient BuildClient()
     {
         var services = new ServiceCollection();
@@ -122,4 +137,28 @@ public class CarrisClientTests : IDisposable
     }
 
     public void Dispose() => _carris.Dispose();
+
+    [Fact]
+    public async Task GetArrivalsAsync_ReadsTheStopFeedTheAppAlreadyTrusts()
+    {
+        const string body = """
+            [{"line_id":"1235","pattern_id":"1235_0_2","vehicle_id":"41|814",
+              "estimated_arrival_unix":1786010000,"scheduled_arrival_unix":1786009800,
+              "observed_arrival_unix":null},
+             {"line_id":"1235","pattern_id":"1235_0_2","vehicle_id":null,
+              "scheduled_arrival_unix":1786013400}]
+            """;
+
+        _carris.Given(Request.Create().WithPath("/stops/060003/realtime").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(200)
+                .WithHeader("Content-Type", "application/json").WithBody(body));
+
+        var arrivals = await BuildArrivals().GetArrivalsAsync("060003", CancellationToken.None);
+
+        Assert.Equal(2, arrivals.Count);
+        Assert.Equal("41|814", arrivals[0].VehicleId);
+        Assert.Equal(1786010000, arrivals[0].ArrivalUnix);
+        Assert.Null(arrivals[1].VehicleId);
+        Assert.Equal(1786013400, arrivals[1].ArrivalUnix);
+    }
 }

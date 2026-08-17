@@ -80,9 +80,10 @@ public class WebPushAlertNotifierTests : IDisposable
         await BuildNotifier().SendAsync(AlertFor(), 7, Subscription(), CancellationToken.None);
 
         var request = _pushService.LogEntries.Single().RequestMessage;
+        var headers = request.Headers!;
 
-        Assert.Contains("vapid", request.Headers!["Authorization"].ToString(), StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("aes128gcm", request.Headers["Content-Encoding"].ToString());
+        Assert.Contains("vapid", headers["Authorization"].ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("aes128gcm", headers["Content-Encoding"].ToString());
         Assert.NotEmpty(request.BodyAsBytes!);
         Assert.DoesNotContain("Cascais", System.Text.Encoding.UTF8.GetString(request.BodyAsBytes!));
     }

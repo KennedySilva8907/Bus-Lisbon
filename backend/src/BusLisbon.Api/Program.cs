@@ -1,3 +1,4 @@
+using BusLisbon.Api.Alerts;
 using BusLisbon.Api.Carris;
 using BusLisbon.Api.Endpoints;
 using BusLisbon.Api.Realtime;
@@ -17,6 +18,8 @@ builder.Services.AddSingleton<VehicleDemand>();
 builder.Services.AddSingleton<VehicleSubscriptions>();
 builder.Services.AddSingleton<IVehicleSender, SignalRVehicleSender>();
 builder.Services.AddSingleton<IVehicleBroadcaster, VehicleBroadcaster>();
+UpstashKeyValueStore.AddUpstash(builder.Services, builder.Configuration);
+builder.Services.AddScoped<AlertStore>();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<CarrisPoller>();
 
@@ -26,6 +29,7 @@ app.UseCors();
 
 app.MapHealthEndpoints();
 app.MapVehicleEndpoints();
+app.MapAlertEndpoints();
 app.MapHub<VehicleHub>("/hubs/vehicles");
 
 app.Run();

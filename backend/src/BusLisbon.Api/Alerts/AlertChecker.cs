@@ -1,4 +1,5 @@
 using BusLisbon.Api.Carris;
+using Microsoft.Extensions.Options;
 
 namespace BusLisbon.Api.Alerts;
 
@@ -8,6 +9,7 @@ public sealed class AlertChecker(
     AlertStore store,
     ICarrisArrivals arrivals,
     IAlertNotifier notifier,
+    IOptions<AlertOptions> options,
     TimeProvider time,
     ILogger<AlertChecker> logger)
 {
@@ -63,7 +65,7 @@ public sealed class AlertChecker(
     private async Task<AlertOutcome> ApplyAsync(
         Alert alert, IReadOnlyList<CarrisArrival> stopArrivals, CancellationToken cancellationToken)
     {
-        var decision = AlertDecider.Decide(alert, stopArrivals, time.GetUtcNow());
+        var decision = AlertDecider.Decide(alert, stopArrivals, time.GetUtcNow(), options.Value);
 
         switch (decision.Outcome)
         {

@@ -1,6 +1,7 @@
 using BusLisbon.Api.Alerts;
 using BusLisbon.Api.Carris;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 
 namespace BusLisbon.Api.Tests;
@@ -20,7 +21,8 @@ public class AlertCheckerTests
     {
         _store = new AlertStore(_kv, _time);
         _checker = new AlertChecker(
-            _store, _arrivals, _notifier, _time, NullLogger<AlertChecker>.Instance);
+            _store, _arrivals, _notifier, Options.Create(new AlertOptions()), _time,
+            NullLogger<AlertChecker>.Instance);
     }
 
     private async Task<Alert> PendingAsync(
@@ -184,7 +186,7 @@ public class AlertCheckerTests
         var alert = await PendingAsync();
         _arrivals.For("060003");
 
-        for (var pass = 0; pass < AlertDecider.MaxMisses; pass++)
+        for (var pass = 0; pass < new AlertOptions().MaxMisses; pass++)
         {
             await _checker.CheckOnceAsync(CancellationToken.None);
         }

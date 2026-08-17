@@ -22,8 +22,13 @@ public class AlertDeciderTests
             ObservedArrivalUnix = observed
         };
 
+    private static readonly AlertOptions EveryTwoMinutes = new() { CheckInterval = TimeSpan.FromMinutes(2) };
+
     private static AlertDecision Decide(Alert alert, params CarrisArrival[] arrivals) =>
-        AlertDecider.Decide(alert, arrivals, Now);
+        AlertDecider.Decide(alert, arrivals, Now, EveryTwoMinutes);
+
+    private static AlertDecision DecideEvery(TimeSpan interval, Alert alert, params CarrisArrival[] arrivals) =>
+        AlertDecider.Decide(alert, arrivals, Now, new AlertOptions { CheckInterval = interval });
 
     [Fact]
     public void ABusStillFarAwayIsLeftAlone()
@@ -46,7 +51,31 @@ public class AlertDeciderTests
     [Fact]
     public void ABusTooFarForTheToleranceDoesNotFire()
     {
-        Assert.Equal(AlertOutcome.Wait, Decide(AlertFor(thresholdMinutes: 10), Arrival(11.5)).Outcome);
+        Assert.Equal(AlertOutcome.Wait, Decide(AlertFor(thresholdMinutes: 10), Arrival(13)).Outcome);
+    }
+
+    [Fact]
+    public void TheToleranceFollowsHowOftenWeCheck()
+    {
+        var alert = AlertFor(thresholdMinutes: 10);
+        var almost = Arrival(11.5);
+
+        Assert.Equal(
+            AlertOutcome.Wait,
+            DecideEvery(TimeSpan.FromMinutes(1), alert, almost).Outcome);
+
+        Assert.Equal(
+            AlertOutcome.Fire,
+            DecideEvery(TimeSpan.FromMinutes(2), alert, almost).Outcome);
+    }
+
+    [Fact]
+    public void CheckingLessOftenNeverShowsMoreMinutesThanWereAskedFor()
+    {
+        var decision = DecideEvery(TimeSpan.FromMinutes(5), AlertFor(thresholdMinutes: 10), Arrival(14));
+
+        Assert.Equal(AlertOutcome.Fire, decision.Outcome);
+        Assert.Equal(10, decision.MinutesToShow);
     }
 
     [Fact]
@@ -109,7 +138,7 @@ public class AlertDeciderTests
     [Fact]
     public void TheFifthMissExpiresTheAlert()
     {
-        Assert.Equal(AlertOutcome.Expire, Decide(AlertFor(missCount: AlertDecider.MaxMisses - 1)).Outcome);
+        Assert.Equal(AlertOutcome.Expire, Decide(AlertFor(missCount: new AlertOptions().MaxMisses - 1)).Outcome);
     }
 
     [Fact]

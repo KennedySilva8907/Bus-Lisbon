@@ -20,6 +20,7 @@ public static class AlertCheckJob
         CarrisClient.AddCarrisClient(builder.Services, builder.Configuration);
         UpstashKeyValueStore.AddUpstash(builder.Services, builder.Configuration);
         builder.Services.Configure<VapidOptions>(builder.Configuration.GetSection(VapidOptions.SectionName));
+        builder.Services.Configure<AlertOptions>(builder.Configuration.GetSection(AlertOptions.SectionName));
         builder.Services.AddHttpClient<PushServiceClient>();
         builder.Services.AddScoped<AlertStore>();
         builder.Services.AddScoped<IAlertNotifier, WebPushAlertNotifier>();

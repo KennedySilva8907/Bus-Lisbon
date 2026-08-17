@@ -79,7 +79,7 @@ public class WebPushAlertNotifierTests : IDisposable
 
         await BuildNotifier().SendAsync(AlertFor(), 7, Subscription(), CancellationToken.None);
 
-        var request = _pushService.LogEntries.Single().RequestMessage;
+        var request = _pushService.LogEntries.Single().RequestMessage!;
         var headers = request.Headers!;
 
         Assert.Contains("vapid", headers["Authorization"].ToString(), StringComparison.OrdinalIgnoreCase);

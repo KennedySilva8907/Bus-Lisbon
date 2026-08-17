@@ -19,13 +19,10 @@ public sealed record AlertDecision(AlertOutcome Outcome, int MinutesToShow = 0, 
 
 public static class AlertDecider
 {
-    public const int MaxMisses = 5;
-
-    private const double FireToleranceMinutes = 1;
     private const int JustArrivedGraceSeconds = 60;
 
     public static AlertDecision Decide(
-        Alert alert, IReadOnlyList<CarrisArrival> arrivals, DateTimeOffset now)
+        Alert alert, IReadOnlyList<CarrisArrival> arrivals, DateTimeOffset now, AlertOptions options)
     {
         var nowSeconds = now.ToUnixTimeSeconds();
         var arrival = NextArrivalOf(alert.VehicleId, arrivals, nowSeconds);
@@ -34,14 +31,14 @@ public static class AlertDecider
         {
             var misses = (alert.MissCount ?? 0) + 1;
 
-            return misses >= MaxMisses
+            return misses >= options.MaxMisses
                 ? AlertDecision.Expire
                 : new AlertDecision(AlertOutcome.Missed, MissCount: misses);
         }
 
         var minutesAway = (arrivalUnix - nowSeconds) / 60d;
 
-        if (minutesAway <= alert.ThresholdMinutes + FireToleranceMinutes)
+        if (minutesAway <= alert.ThresholdMinutes + options.CheckInterval.TotalMinutes)
         {
             return new AlertDecision(AlertOutcome.Fire, MinutesToShow: MinutesToShow(alert, minutesAway));
         }

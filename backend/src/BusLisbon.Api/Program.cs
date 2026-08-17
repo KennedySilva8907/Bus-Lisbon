@@ -18,6 +18,7 @@ builder.Services.AddSingleton<VehicleDemand>();
 builder.Services.AddSingleton<VehicleSubscriptions>();
 builder.Services.AddSingleton<IVehicleSender, SignalRVehicleSender>();
 builder.Services.AddSingleton<IVehicleBroadcaster, VehicleBroadcaster>();
+builder.Services.Configure<AlertOptions>(builder.Configuration.GetSection(AlertOptions.SectionName));
 UpstashKeyValueStore.AddUpstash(builder.Services, builder.Configuration);
 builder.Services.AddScoped<AlertStore>();
 builder.Services.AddSignalR();

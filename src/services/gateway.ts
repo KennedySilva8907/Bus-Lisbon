@@ -59,3 +59,17 @@ export function gatewayVehicleUrl(
 
   return patternId ? `${path}?patternId=${encodeURIComponent(patternId)}` : path;
 }
+
+export interface BackendState {
+  answered: boolean;
+  failed: boolean;
+  connected: boolean;
+}
+
+// While the backend is still starting there is nothing to show, and the wait is
+// ten to fifteen seconds. A backend that answered 404 counts as awake: it knows
+// the bus is gone. Treating that as asleep would leave the app pulling the whole
+// Carris feed forever, which is what the realtime work removed.
+export function backendIsAwake(state: BackendState): boolean {
+  return state.connected || (state.answered && !state.failed);
+}

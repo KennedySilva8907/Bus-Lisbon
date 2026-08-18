@@ -13,9 +13,6 @@ public static class AlertCheckJob
     {
         var builder = Host.CreateApplicationBuilder(args);
 
-        builder.Logging.SetMinimumLevel(LogLevel.Warning);
-        builder.Logging.AddFilter("BusLisbon", LogLevel.Information);
-
         builder.Services.AddSingleton(TimeProvider.System);
         CarrisClient.AddCarrisClient(builder.Services, builder.Configuration);
         UpstashKeyValueStore.AddUpstash(builder.Services, builder.Configuration);

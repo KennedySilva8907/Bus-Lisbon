@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { GATEWAY_BASE, isGatewayEnabled, toVehicle, gatewayVehicleUrl, type GatewayVehicleResponse } from './gateway';
+import { GATEWAY_BASE, backendIsAwake, isGatewayEnabled, toVehicle, gatewayVehicleUrl, type GatewayVehicleResponse } from './gateway';
 import { freshestVehicle, useVehicleStream } from './realtime';
 
 const API_BASE_URL = 'https://api.carrismetropolitana.pt';
@@ -90,6 +90,26 @@ function isLiveVehicle(v: Vehicle): boolean {
   return true;
 }
 
+export function pickFromFleet(
+  fleet: Vehicle[] | undefined,
+  vehicleId: string | null,
+  lineId?: string | null,
+  patternId?: string | null
+): Vehicle | null {
+  const live = fleet ? fleet.filter(isLiveVehicle) : [];
+
+  if (vehicleId) {
+    return live.find(vehicle => vehicle.id === vehicleId) ?? null;
+  }
+
+  if (lineId) {
+    return live.find(vehicle =>
+      vehicle.line_id === lineId && (!patternId || vehicle.pattern_id === patternId)) ?? null;
+  }
+
+  return null;
+}
+
 export function useSingleVehicle(vehicleId: string | null, lineId?: string | null, patternId?: string | null) {
   const shouldFetch = !!(vehicleId || lineId);
   const gatewayUrl = isGatewayEnabled()
@@ -121,33 +141,38 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
     }
   );
 
+  // Until the backend answers there is nothing to paint, and a cold container
+  // takes about twenty seconds. Carris answers in a fraction of that, so it
+  // covers the gap and then stops the moment the backend is up.
+  const backendAwake = gatewayUrl !== null && backendIsAwake({
+    answered: !gateway.isLoading,
+    failed: !!gateway.error,
+    connected: stream.connected,
+  });
+
   const fleet = useSWR<Vehicle[]>(
-    shouldFetch && !gatewayUrl ? `${API_BASE_URL}/v2/vehicles` : null,
+    shouldFetch && !backendAwake ? `${API_BASE_URL}/v2/vehicles` : null,
     fetcher,
     { refreshInterval: 8000, revalidateOnFocus: false, dedupingInterval: 7000, keepPreviousData: true }
   );
 
+  const fromFeed = pickFromFleet(fleet.data, vehicleId, lineId, patternId);
+
   if (gatewayUrl) {
+    const fromBackend = freshestVehicle(
+      stream.vehicle,
+      stream.connected,
+      gateway.data ? toVehicle(gateway.data) : null
+    );
+
     return {
-      vehicle: freshestVehicle(
-        stream.vehicle,
-        stream.connected,
-        gateway.data ? toVehicle(gateway.data) : null
-      ),
-      isLoading: gateway.isLoading && !stream.vehicle,
+      vehicle: fromBackend ?? fromFeed,
+      isLoading: !fromBackend && !fromFeed && gateway.isLoading,
       isError: gateway.error,
     };
   }
 
-  const liveVehicles = fleet.data ? fleet.data.filter(isLiveVehicle) : [];
-
-  const vehicle = (vehicleId
-    ? liveVehicles.find(v => v.id === vehicleId)
-    : lineId
-      ? liveVehicles.find(v => v.line_id === lineId && (!patternId || v.pattern_id === patternId))
-      : null) || null;
-
-  return { vehicle, isLoading: fleet.isLoading, isError: fleet.error };
+  return { vehicle: fromFeed, isLoading: fleet.isLoading, isError: fleet.error };
 }
 
 // ── ETAs ───────────────────────────────────────────────

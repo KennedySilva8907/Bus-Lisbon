@@ -122,9 +122,6 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
     patternId
   );
 
-  // One bus from our own API is ~250 bytes; the Carris feed is ~160 KB every
-  // time. While the stream is up this poll goes idle and only paints the first
-  // position; when the stream drops it comes back and takes over again.
   const gateway = useSWR<GatewayVehicleResponse | null>(
     gatewayUrl,
     async (url: string) => {
@@ -141,9 +138,6 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
     }
   );
 
-  // Until the backend answers there is nothing to paint, and a cold container
-  // takes about twenty seconds. Carris answers in a fraction of that, so it
-  // covers the gap and then stops the moment the backend is up.
   const backendAwake = gatewayUrl !== null && backendIsAwake({
     answered: !gateway.isLoading,
     failed: !!gateway.error,
@@ -183,12 +177,6 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
 const lastETAFetchAt = new Map<string, number>();
 
 export function useStopETA(stopId: string | null) {
-  // The unversioned endpoint, not /v2/arrivals/by_stop. The v2 one is the
-  // documented replacement and the payload is shaped the same, but since the
-  // operator refactored it in August 2026 it mostly answers 502, and when it
-  // does answer the estimates are hours stale and `line_id` arrives with a
-  // trip prefix glued on. Stops/patterns/shapes stay unversioned for their own
-  // reason: /v2/stops ships empty `name`/`locality` for every stop.
   const key = stopId ? `${API_BASE_URL}/stops/${stopId}/realtime` : null;
   const { data, error, isLoading } = useSWR<ETA[]>(
     key,

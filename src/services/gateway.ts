@@ -1,8 +1,5 @@
 import type { Vehicle } from './api';
 
-// The C# backend speaks camelCase; the rest of this app reads snake_case on
-// vehicles. Rather than rename those fields across every component mid-migration,
-// the conversion happens here and nowhere else.
 export interface GatewayVehicle {
   id: string;
   lat: number;
@@ -21,9 +18,6 @@ export interface GatewayVehicleResponse {
   stale: boolean;
 }
 
-// Empty means "talk to Carris directly", which is what this app did before the
-// backend existed. Note this is inlined at build time by Vite, so switching it
-// needs a rebuild, not just an env change.
 export const GATEWAY_BASE = (import.meta.env.VITE_GATEWAY_BASE as string | undefined) || '';
 
 export function isGatewayEnabled(): boolean {
@@ -66,10 +60,6 @@ export interface BackendState {
   connected: boolean;
 }
 
-// While the backend is still starting there is nothing to show, and the wait is
-// ten to fifteen seconds. A backend that answered 404 counts as awake: it knows
-// the bus is gone. Treating that as asleep would leave the app pulling the whole
-// Carris feed forever, which is what the realtime work removed.
 export function backendIsAwake(state: BackendState): boolean {
   return state.connected || (state.answered && !state.failed);
 }

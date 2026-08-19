@@ -14,6 +14,9 @@ export default defineConfig({
       },
     },
   },
+  optimizeDeps: {
+    exclude: ['maplibre-gl'],
+  },
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],

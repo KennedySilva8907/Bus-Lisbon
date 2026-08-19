@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import TrackingMap from './components/TrackingMap';
+import VectorMap from './components/VectorMap';
 import StopDetailsPanel from './components/StopDetailsPanel';
 import SearchBar from './components/SearchBar';
 import SplashScreen from './components/SplashScreen';
 import { useStops } from './services/api';
 import type { Stop } from './services/api';
 import { useFavorites } from './hooks/useFavorites';
+import { usesVectorMap } from './services/basemap';
 
 function App() {
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
@@ -138,6 +140,9 @@ function App() {
 
       {/* Main Map Area */}
       <main className="flex-1 w-full h-full z-0">
+        {usesVectorMap() ? (
+          <VectorMap isDarkMap={isDarkMap} />
+        ) : (
         <TrackingMap
           onStopSelect={handleStopSelect}
           selectedVehicleId={selectedVehicleId}
@@ -149,6 +154,7 @@ function App() {
           isPanelOpen={!!selectedStop}
           isPanelExpanded={isPanelExpanded}
         />
+        )}
       </main>
 
       {/* Side/bottom panel — only mounted once a stop is selected. On desktop

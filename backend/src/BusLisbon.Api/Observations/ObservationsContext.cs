@@ -1,3 +1,4 @@
+using BusLisbon.Api.Reliability;
 using Microsoft.EntityFrameworkCore;
 
 namespace BusLisbon.Api.Observations;
@@ -5,6 +6,8 @@ namespace BusLisbon.Api.Observations;
 public sealed class ObservationsContext(DbContextOptions<ObservationsContext> options) : DbContext(options)
 {
     public DbSet<ArrivalObservation> Arrivals => Set<ArrivalObservation>();
+
+    public DbSet<LineReliability> LineReliability => Set<LineReliability>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -22,5 +25,10 @@ public sealed class ObservationsContext(DbContextOptions<ObservationsContext> op
             .IsUnique();
 
         arrivals.HasIndex(arrival => arrival.ServiceDate);
+
+        var reliability = builder.Entity<LineReliability>();
+
+        reliability.HasKey(line => line.LineId);
+        reliability.Property(line => line.LineId).HasMaxLength(32);
     }
 }

@@ -43,26 +43,42 @@ export function toStopCollection(stops: Stop[]): StopCollection {
 export const STOPS_SOURCE = 'stops';
 export const STOPS_LAYER = 'stops-circles';
 export const SELECTED_LAYER = 'stops-selected';
-export const STOPS_MIN_ZOOM = 13;
-
+export const SELECTED_DOT_LAYER = 'stops-selected-dot';
+export const SELECTED_PIN_IMAGE = 'stop-pin';
+export const SELECTED_PIN_URL = '/stop-pin.svg';
 export const stopRadius = [
-  'interpolate',
-  ['linear'],
-  ['zoom'],
-  13, 5,
-  14, 6,
-  15, 8,
-  16, 10,
-  18, 12,
+  'interpolate', ['linear'], ['zoom'],
+  9, 1,
+  26, 20,
 ];
 
-export const selectedStopRadius = [
-  'interpolate',
-  ['linear'],
-  ['zoom'],
-  13, 11,
-  14, 12,
-  15, 14,
-  16, 16,
-  18, 18,
+export const mutedStopRadius = [
+  'interpolate', ['linear'], ['zoom'],
+  9, 1,
+  26, 10,
+];
+
+export const mutedStopStrokeWidth = [
+  'interpolate', ['linear'], ['zoom'],
+  9, 0.01,
+  26, 3,
+];
+
+export const stopStrokeWidth = [
+  'interpolate', ['linear'], ['zoom'],
+  9, 0.01,
+  26, 7,
+];
+
+export const selectedDotRadius = [
+  'interpolate', ['linear'], ['zoom'],
+  9, 3,
+  26, 22,
+];
+
+export const selectedPinSize = [
+  'interpolate', ['linear'], ['zoom'],
+  9, 0.28,
+  16, 0.5,
+  22, 0.7,
 ];

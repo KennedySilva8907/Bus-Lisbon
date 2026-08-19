@@ -202,6 +202,33 @@ export function useStopETA(stopId: string | null) {
 
 // ── Pattern Shape (cached indefinitely) ────────────────
 
+export interface PatternStop {
+  stop: Stop;
+  stop_sequence: number;
+}
+
+export function usePattern(patternId?: string | null) {
+  const { data } = useSWR(
+    patternId ? `${API_BASE_URL}/patterns/${patternId}` : null,
+    fetcher,
+    { revalidateOnFocus: false, revalidateIfStale: false, dedupingInterval: 86400000 }
+  );
+
+  const shapeId = data?.shape_id;
+  const { data: shapeData } = useSWR(
+    shapeId ? `${API_BASE_URL}/shapes/${shapeId}` : null,
+    fetcher,
+    { revalidateOnFocus: false, revalidateIfStale: false, dedupingInterval: 86400000 }
+  );
+
+  return {
+    shape: (shapeData?.geojson?.geometry?.coordinates || []) as number[][],
+    colour: (data?.color as string | undefined) || '#E53935',
+    textColour: (data?.text_color as string | undefined) || '#FFFFFF',
+    stops: ((data?.path || []) as PatternStop[]).map(entry => entry.stop).filter(Boolean),
+  };
+}
+
 export function usePatternShape(patternId?: string | null) {
   const { data: patternData } = useSWR(
     patternId ? `${API_BASE_URL}/patterns/${patternId}` : null, 

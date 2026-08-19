@@ -63,6 +63,14 @@ jobs:
           docker push "$JOB_IMAGE"
           echo "JOB_IMAGE=$JOB_IMAGE" >> "$GITHUB_ENV"
 
+      - name: Build and push the collection job image
+        run: |
+          COLLECTOR_IMAGE=ghcr.io/${{ github.repository_owner }}/buslisbon-collectionjob:${{ github.sha }}
+          COLLECTOR_IMAGE=$(echo "$COLLECTOR_IMAGE" | tr '[:upper:]' '[:lower:]')
+          docker build --target collector -t "$COLLECTOR_IMAGE" backend
+          docker push "$COLLECTOR_IMAGE"
+          echo "COLLECTOR_IMAGE=$COLLECTOR_IMAGE" >> "$GITHUB_ENV"
+
       - name: Sign in to Azure
         uses: azure/login@v2
         with:
@@ -89,6 +97,14 @@ jobs:
             az containerapp job update               --name cj-buslisbon-alerts               --resource-group rg-buslisbon               --image "$JOB_IMAGE"
           else
             echo "The alert job has not been created yet, leaving the image in the registry"
+          fi
+
+      - name: Roll out the collection job image
+        run: |
+          if az containerapp job show --name cj-buslisbon-collection --resource-group rg-buslisbon >/dev/null 2>&1; then
+            az containerapp job update --name cj-buslisbon-collection --resource-group rg-buslisbon --image "$COLLECTOR_IMAGE"
+          else
+            echo "The collection job has not been created yet, leaving the image in the registry"
           fi
 
       - name: Smoke test the deployed API

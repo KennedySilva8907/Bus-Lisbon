@@ -4,7 +4,9 @@ import { fromUnixTime } from 'date-fns';
 import { X, Star, ChevronUp } from 'lucide-react';
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { useAlerts } from '../hooks/useAlerts';
+import { useFavoriteLines } from '../hooks/useFavoriteLines';
 import NotificationBell from './NotificationBell';
+import FavouriteLineStar from './FavouriteLineStar';
 import AlertSetupModal from './AlertSetupModal';
 
 interface StopDetailsPanelProps {
@@ -25,6 +27,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
   const [pastExpandedForStop, setPastExpandedForStop] = useState<string | null>(null);
   const showAllPast = pastExpandedForStop === stop?.id;
   const { findAlertFor, create: createAlert, cancel: cancelAlert } = useAlerts();
+  const { toggle: toggleFavoriteLine, isFavoriteLine } = useFavoriteLines();
   const [alertModalEta, setAlertModalEta] = useState<ETA | null>(null);
 
   // Tick "now" every 5s so countdowns drop smoothly instead of waiting on the
@@ -384,7 +387,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                       onClick={hasVehicle && onVehicleSelect
                         ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id)
                         : undefined}
-                      className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
+                      className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all ${
                         hasVehicle ? 'cursor-pointer active:scale-[0.98]' : ''
                       } ${
                         isSelected
@@ -431,6 +434,12 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                           )}
                         </div>
                       </div>
+                      <FavouriteLineStar
+                        lineId={eta.line_id}
+                        chosen={isFavoriteLine(eta.line_id)}
+                        onToggle={toggleFavoriteLine}
+                      />
+
                       {hasVehicle && stop && (() => {
                         const existing = findAlertFor(eta.vehicle_id, stop.id);
                         return (

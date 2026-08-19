@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChartNoAxesColumn, Star, X } from 'lucide-react';
+import { ChartNoAxesColumn, X } from 'lucide-react';
 import {
   describeAverage,
   describeFreshness,
@@ -12,25 +12,13 @@ import {
   type RankedLine,
 } from '../services/reliability';
 import { useFavoriteLines } from '../hooks/useFavoriteLines';
+import FavouriteLineStar from './FavouriteLineStar';
 
 function barColour(percent: number): string {
   if (percent >= 80) return 'bg-emerald-400';
   if (percent >= 50) return 'bg-carris-yellow';
 
   return 'bg-orange-400';
-}
-
-function FavouriteStar({ lineId, chosen, onToggle }: { lineId: string; chosen: boolean; onToggle: (lineId: string) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onToggle(lineId)}
-      className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full transition-colors hover:bg-white/10"
-      aria-label={chosen ? `Tirar a linha ${lineId} das minhas` : `Juntar a linha ${lineId} às minhas`}
-    >
-      <Star size={15} className={chosen ? 'fill-carris-yellow text-carris-yellow' : 'text-gray-500'} />
-    </button>
-  );
 }
 
 function MissingLineRow({ lineId, onToggle }: { lineId: string; onToggle: (lineId: string) => void }) {
@@ -41,7 +29,7 @@ function MissingLineRow({ lineId, onToggle }: { lineId: string; onToggle: (lineI
           {lineId}
         </span>
         <p className="flex-1 min-w-0 text-[11px] text-gray-500 truncate">Ainda sem passagens observadas</p>
-        <FavouriteStar lineId={lineId} chosen onToggle={onToggle} />
+        <FavouriteLineStar lineId={lineId} chosen onToggle={onToggle} />
       </div>
     </li>
   );
@@ -69,7 +57,7 @@ function LineRow({ line, chosen, onToggle }: { line: RankedLine; chosen: boolean
 
         <span className="shrink-0 w-10 text-right text-sm font-bold text-white tabular-nums">{percent}%</span>
 
-        <FavouriteStar lineId={line.lineId} chosen={chosen} onToggle={onToggle} />
+        <FavouriteLineStar lineId={line.lineId} chosen={chosen} onToggle={onToggle} />
       </div>
     </li>
   );

@@ -5,6 +5,7 @@ import { useStops, useSingleVehicle, usePatternShape, type Stop, type Vehicle } 
 import { useEffect, memo, useCallback, useState, useMemo, useRef } from 'react';
 import BusMarker from './BusMarker';
 import AlertsPanel from './AlertsPanel';
+import ReliabilityPanel from './ReliabilityPanel';
 
 // Fix for default Leaflet marker icons in React. Leaflet looks up icon paths
 // via a private _getIconUrl method on the prototype; bundlers can't resolve
@@ -561,6 +562,8 @@ export default function TrackingMap({ onStopSelect, selectedVehicleId, selectedP
       >
         {/* Alerts shortcut — moved here so it stays out of the iPhone status bar */}
         <AlertsPanel />
+
+        <ReliabilityPanel />
 
         {/* Map theme toggle */}
         <button

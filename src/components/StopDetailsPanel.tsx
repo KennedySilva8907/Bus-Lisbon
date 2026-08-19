@@ -3,7 +3,6 @@ import { describeArrival } from '../services/arrivals';
 import { fromUnixTime } from 'date-fns';
 import { X, Star, ChevronUp } from 'lucide-react';
 import { useRef, useEffect, useState, useMemo } from 'react';
-import { recordDeviation } from '../services/history';
 import { useAlerts } from '../hooks/useAlerts';
 import NotificationBell from './NotificationBell';
 import AlertSetupModal from './AlertSetupModal';
@@ -23,14 +22,10 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
   const { etas, lastUpdated, isLoading } = useStopETA(stop?.id || null);
   const panelRef = useRef<HTMLElement>(null);
   const touchRef = useRef({ startY: 0, isDragging: false, isOnHandle: false });
-  const [showAllPast, setShowAllPast] = useState(false);
+  const [pastExpandedForStop, setPastExpandedForStop] = useState<string | null>(null);
+  const showAllPast = pastExpandedForStop === stop?.id;
   const { findAlertFor, create: createAlert, cancel: cancelAlert } = useAlerts();
   const [alertModalEta, setAlertModalEta] = useState<ETA | null>(null);
-
-  // Reset showAllPast when stop changes
-  useEffect(() => {
-    setShowAllPast(false);
-  }, [stop?.id]);
 
   // Tick "now" every 5s so countdowns drop smoothly instead of waiting on the
   // 8s SWR refresh. Also resync immediately when the page becomes visible
@@ -88,18 +83,6 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
   const hasRealtime = etas.some(
     e => !!e.vehicle_id || (e.estimated_arrival_unix != null && e.estimated_arrival_unix !== e.scheduled_arrival_unix),
   );
-
-  // Record deviations for history tracking
-  const futureEtaKeys = futureEtas.map(e => `${e.line_id}-${e.scheduled_arrival_unix}`).join(',');
-  useEffect(() => {
-    if (!stop || futureEtas.length === 0) return;
-    for (const eta of futureEtas) {
-      if (eta.estimated_arrival_unix && eta.scheduled_arrival_unix) {
-        recordDeviation(eta.line_id, stop.id, eta.estimated_arrival_unix, eta.scheduled_arrival_unix);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [futureEtaKeys, stop?.id]);
 
   if (!stop) return null;
 
@@ -239,7 +222,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                   {/* "Ver passagens anteriores" expand button */}
                   {olderPast.length > 0 && (
                     <button
-                      onClick={() => setShowAllPast(!showAllPast)}
+                      onClick={() => setPastExpandedForStop(showAllPast ? null : stop.id)}
                       className="w-full flex items-center justify-center gap-1.5 py-2 text-carris-yellow/60 hover:text-carris-yellow/80 transition-colors text-[12px]"
                     >
                       <ChevronUp size={14} className={`transition-transform duration-300 ${showAllPast ? 'rotate-180' : ''}`} />

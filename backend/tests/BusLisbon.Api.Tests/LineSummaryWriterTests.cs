@@ -55,10 +55,9 @@ public class LineSummaryWriterTests : IDisposable
         await using var context = new ObservationsContext(_options);
         var settings = Options.Create(new ReliabilityOptions { MinimumPassages = 3 });
 
-        var writer = new LineSummaryWriter(
-            context, new LinePunctualityQuery(context, settings, _time), _time);
+        var lines = await new LinePunctualityQuery(context, settings, _time).RunAsync(CancellationToken.None);
 
-        return await writer.RewriteAsync(CancellationToken.None);
+        return await new LineSummaryWriter(context, _time).RewriteAsync(lines, CancellationToken.None);
     }
 
     private async Task<List<LineReliability>> StoredAsync()

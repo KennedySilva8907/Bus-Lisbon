@@ -7,14 +7,14 @@ interface SplashScreenProps {
 /**
  * Splash screen — "Edge" layout.
  *
- * Phone: the brand artwork fills the screen edge-to-edge. A gradient lifts
+ * Phone: the portrait artwork fills the screen edge-to-edge. A gradient lifts
  * the bottom into pure black where the wordmark, coordinates, and progress
  * bar sit.
  *
- * Larger viewports: the artwork is constrained to a centred phone-aspect
- * column so it stays composed instead of being stretched across a landscape
- * monitor. The surrounding area is the same Carris yellow as the artwork's
- * top half, so the seam is invisible.
+ * Screens wider than they are tall get the landscape artwork instead, and the
+ * title stack is held to a column on the left so it does not stretch across
+ * a wide monitor. The choice follows the shape of the viewport, not its
+ * width: a tablet held upright keeps the portrait artwork.
  *
  * Progress eases toward 92 % via a 1 − e^(−t/τ) curve while the app boots,
  * then snaps to 100 % the moment the parent triggers the fade — the user
@@ -50,21 +50,18 @@ export default function SplashScreen({ fading }: SplashScreenProps) {
       }`}
       style={{ backgroundColor: '#FFCC00' }}
     >
-      {/* Centred column. On phones it equals the viewport; on tablets / desktop
-        * it's a phone-aspect frame so the portrait artwork doesn't stretch. */}
-      <div
-        className="relative w-full h-full overflow-hidden"
-        style={{ maxWidth: 'min(100%, 520px)' }}
-      >
-        <img
-          src="/splash-hero.jpg"
-          alt=""
-          aria-hidden="true"
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{ objectPosition: 'center 30%' }}
-          loading="eager"
-          decoding="sync"
-        />
+      <div className="relative w-full h-full overflow-hidden">
+        <picture>
+          <source media="(min-aspect-ratio: 1/1)" srcSet="/splash-wide.jpg" />
+          <img
+            src="/splash-hero.jpg"
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 w-full h-full object-cover object-[center_30%] landscape:object-center"
+            loading="eager"
+            decoding="sync"
+          />
+        </picture>
 
         {/* Gradient lifts the lower band into black for legibility */}
         <div
@@ -77,9 +74,20 @@ export default function SplashScreen({ fading }: SplashScreenProps) {
           }}
         />
 
+        {/* On a wide screen the artwork is bright where the title sits, so the
+          * left edge is darkened as well. */}
+        <div
+          aria-hidden="true"
+          className="hidden landscape:block absolute inset-y-0 left-0 w-2/3 pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(90deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.45) 45%, transparent 100%)',
+          }}
+        />
+
         {/* Title stack */}
         <div
-          className="absolute left-0 right-0 px-5 sm:px-7"
+          className="absolute left-0 right-0 px-5 sm:px-7 md:px-14 landscape:max-w-2xl"
           style={{ bottom: 'max(28px, env(safe-area-inset-bottom, 0px) + 16px)' }}
         >
           <div

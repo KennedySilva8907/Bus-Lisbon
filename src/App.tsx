@@ -141,7 +141,12 @@ function App() {
       {/* Main Map Area */}
       <main className="flex-1 w-full h-full z-0">
         {usesVectorMap() ? (
-          <VectorMap isDarkMap={isDarkMap} />
+          <VectorMap
+            stops={stops}
+            selectedStop={selectedStop}
+            isDarkMap={isDarkMap}
+            onStopSelect={handleStopSelect}
+          />
         ) : (
         <TrackingMap
           onStopSelect={handleStopSelect}

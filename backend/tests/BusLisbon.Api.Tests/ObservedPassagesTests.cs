@@ -79,6 +79,30 @@ public class ObservedPassagesTests
     }
 
     [Fact]
+    public void APassageAfterMidnightIsObservedOnTheDayItRan()
+    {
+        var scheduled = DateTimeOffset.Parse("2026-08-19T00:34:00+01:00").ToUnixTimeSeconds();
+        var observedADayEarly = DateTimeOffset.Parse("2026-08-18T00:27:00+01:00").ToUnixTimeSeconds();
+
+        var passages = From(Arrival(scheduled, observed: observedADayEarly));
+
+        Assert.Equal(DateTimeOffset.Parse("2026-08-19T00:27:00+01:00").ToUnixTimeSeconds(), passages[0].ObservedUnix);
+        Assert.Equal(-420, passages[0].LatenessSeconds);
+    }
+
+    [Fact]
+    public void ABusThatIsMerelyEarlyIsLeftAlone()
+    {
+        var scheduled = DateTimeOffset.Parse("2026-08-19T08:00:00+01:00").ToUnixTimeSeconds();
+        var observed = DateTimeOffset.Parse("2026-08-19T07:55:00+01:00").ToUnixTimeSeconds();
+
+        var passages = From(Arrival(scheduled, observed: observed));
+
+        Assert.Equal(observed, passages[0].ObservedUnix);
+        Assert.Equal(-300, passages[0].LatenessSeconds);
+    }
+
+    [Fact]
     public void TheServiceDateIsTheLisbonDateNotUtc()
     {
         var lateNight = DateTimeOffset.Parse("2026-08-18T23:30:00+00:00").ToUnixTimeSeconds();

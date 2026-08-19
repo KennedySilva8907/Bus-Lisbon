@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChartNoAxesColumn, X } from 'lucide-react';
 import {
-  describeAverage,
+  describeTrust,
   describeFreshness,
-  describeSpan,
   describeToleranceLabel,
   punctualityPercent,
   splitByFavourites,
@@ -13,13 +12,21 @@ import {
 } from '../services/reliability';
 import { useFavoriteLines } from '../hooks/useFavoriteLines';
 import FavouriteLineStar from './FavouriteLineStar';
+import LineTrustDetail from './LineTrustDetail';
 
-function barColour(percent: number): string {
-  if (percent >= 80) return 'bg-emerald-400';
-  if (percent >= 50) return 'bg-carris-yellow';
+const TRUST_BAR: Record<string, string> = {
+  high: 'bg-emerald-400',
+  good: 'bg-emerald-300',
+  uneven: 'bg-carris-yellow',
+  low: 'bg-orange-400',
+};
 
-  return 'bg-orange-400';
-}
+const TRUST_TEXT: Record<string, string> = {
+  high: 'text-emerald-400',
+  good: 'text-emerald-300',
+  uneven: 'text-carris-yellow',
+  low: 'text-orange-400',
+};
 
 function MissingLineRow({ lineId, onToggle }: { lineId: string; onToggle: (lineId: string) => void }) {
   return (
@@ -35,27 +42,45 @@ function MissingLineRow({ lineId, onToggle }: { lineId: string; onToggle: (lineI
   );
 }
 
-function LineRow({ line, chosen, onToggle }: { line: RankedLine; chosen: boolean; onToggle: (lineId: string) => void }) {
+function LineRow({
+  line,
+  chosen,
+  onToggle,
+  onOpen,
+}: {
+  line: RankedLine;
+  chosen: boolean;
+  onToggle: (lineId: string) => void;
+  onOpen: (line: RankedLine) => void;
+}) {
   const percent = punctualityPercent(line);
+  const trust = describeTrust(percent);
 
   return (
-    <li className="px-4 py-3 border-b border-white/5 last:border-0">
-      <div className="flex items-center gap-2">
-        <span className="shrink-0 px-2 py-1 rounded-lg bg-carris-yellow text-carris-dark text-xs font-black tabular-nums">
-          {line.lineId}
-        </span>
+    <li className="border-b border-white/5 last:border-0">
+      <div className="flex items-center gap-2 px-4 py-3">
+        <button
+          type="button"
+          onClick={() => onOpen(line)}
+          className="flex flex-1 min-w-0 items-center gap-2 text-left"
+          aria-label={`Ver os números da linha ${line.lineId}`}
+        >
+          <span className="shrink-0 px-2 py-1 rounded-lg bg-carris-yellow text-carris-dark text-xs font-black tabular-nums">
+            {line.lineId}
+          </span>
 
-        <div className="flex-1 min-w-0">
-          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-            <div className={`h-full ${barColour(percent)}`} style={{ width: `${percent}%` }} />
-          </div>
-          <p className="mt-1.5 text-[11px] text-gray-400 truncate">
-            {describeAverage(line.averageLatenessSeconds)} · {line.passages} passagens{' '}
-            {describeSpan(line.firstServiceDate, line.lastServiceDate)}
-          </p>
-        </div>
+          <span className="flex-1 min-w-0">
+            <span className="block h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <span className={`block h-full ${TRUST_BAR[trust.level]}`} style={{ width: `${percent}%` }} />
+            </span>
+            <span className="mt-1.5 block text-[11px] truncate">
+              <span className={`font-semibold ${TRUST_TEXT[trust.level]}`}>{trust.label}</span>
+              <span className="text-gray-500"> · {line.passages} passagens</span>
+            </span>
+          </span>
 
-        <span className="shrink-0 w-10 text-right text-sm font-bold text-white tabular-nums">{percent}%</span>
+          <span className="shrink-0 w-10 text-right text-sm font-bold text-white tabular-nums">{percent}%</span>
+        </button>
 
         <FavouriteLineStar lineId={line.lineId} chosen={chosen} onToggle={onToggle} />
       </div>
@@ -68,6 +93,7 @@ export default function ReliabilityPanel() {
   const open = openedAtUnix > 0;
   const { ranking, failed, isLoading, available } = useLineRanking(open);
   const { favoriteLines, toggle, isFavoriteLine } = useFavoriteLines();
+  const [detail, setDetail] = useState<RankedLine | null>(null);
   const split = splitByFavourites(ranking?.lines ?? [], favoriteLines);
 
   if (!available) return null;
@@ -146,7 +172,7 @@ export default function ReliabilityPanel() {
                       </h3>
                       <ul>
                         {split.mine.map(line => (
-                          <LineRow key={line.lineId} line={line} chosen onToggle={toggle} />
+                          <LineRow key={line.lineId} line={line} chosen onToggle={toggle} onOpen={setDetail} />
                         ))}
                         {split.missing.map(lineId => (
                           <MissingLineRow key={lineId} lineId={lineId} onToggle={toggle} />
@@ -164,6 +190,7 @@ export default function ReliabilityPanel() {
                         line={line}
                         chosen={isFavoriteLine(line.lineId)}
                         onToggle={toggle}
+                        onOpen={setDetail}
                       />
                     ))}
                   </ul>
@@ -173,6 +200,14 @@ export default function ReliabilityPanel() {
           </div>
         </div>,
         document.body
+      )}
+
+      {detail && ranking && (
+        <LineTrustDetail
+          line={detail}
+          toleranceSeconds={ranking.toleranceSeconds}
+          onClose={() => setDetail(null)}
+        />
       )}
     </>
   );

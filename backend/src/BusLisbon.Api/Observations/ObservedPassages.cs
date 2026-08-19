@@ -4,6 +4,10 @@ namespace BusLisbon.Api.Observations;
 
 public static class ObservedPassages
 {
+    private const long ADay = 24 * 60 * 60;
+
+    private const long HalfADay = ADay / 2;
+
     public static IReadOnlyList<ArrivalObservation> From(
         string stopId, IReadOnlyList<CarrisArrival> arrivals, TimeZoneInfo zone)
     {
@@ -32,12 +36,15 @@ public static class ObservedPassages
                 ServiceDate = ServiceDateOf(scheduled, zone),
                 ScheduledUnix = scheduled,
                 EstimatedUnix = Predicted(arrival.EstimatedArrivalUnix, scheduled),
-                ObservedUnix = observed,
+                ObservedUnix = OnTheDayItRan(observed, scheduled),
             });
         }
 
         return passages;
     }
+
+    private static long OnTheDayItRan(long observed, long scheduled) =>
+        scheduled - observed > HalfADay ? observed + ADay : observed;
 
     private static long? Predicted(long? estimated, long scheduled) =>
         estimated is { } value && value != scheduled ? value : null;

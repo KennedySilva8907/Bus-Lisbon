@@ -31,7 +31,6 @@ public static class ArrivalCollectionJob
                 sql => sql.EnableRetryOnFailure(maxRetryCount: 8, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null)));
         builder.Services.AddScoped<ArrivalCollector>();
         builder.Services.AddScoped<LinePunctualityQuery>();
-        builder.Services.AddScoped<LineSummaryWriter>();
         builder.Services.AddScoped<LineRankingPublisher>();
 
         using var host = builder.Build();
@@ -59,14 +58,10 @@ public static class ArrivalCollectionJob
                 .RunAsync(CancellationToken.None);
 
             await scope.ServiceProvider
-                .GetRequiredService<LineSummaryWriter>()
-                .RewriteAsync(lines, CancellationToken.None);
-
-            await scope.ServiceProvider
                 .GetRequiredService<LineRankingPublisher>()
                 .PublishAsync(lines, CancellationToken.None);
 
-            logger.LogInformation("Summarised and published {Lines} lines", lines.Count);
+            logger.LogInformation("Published the ranking for {Lines} lines", lines.Count);
 
             return 0;
         }

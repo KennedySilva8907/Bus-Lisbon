@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChartNoAxesColumn, X } from 'lucide-react';
+import { ChartNoAxesColumn, Star, X } from 'lucide-react';
 import {
   describeAverage,
   describeFreshness,
   describeSpan,
   describeToleranceLabel,
   punctualityPercent,
+  splitByFavourites,
   useLineRanking,
   type RankedLine,
 } from '../services/reliability';
+import { useFavoriteLines } from '../hooks/useFavoriteLines';
 
 function barColour(percent: number): string {
   if (percent >= 80) return 'bg-emerald-400';
@@ -18,12 +20,39 @@ function barColour(percent: number): string {
   return 'bg-orange-400';
 }
 
-function LineRow({ line }: { line: RankedLine }) {
+function FavouriteStar({ lineId, chosen, onToggle }: { lineId: string; chosen: boolean; onToggle: (lineId: string) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(lineId)}
+      className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full transition-colors hover:bg-white/10"
+      aria-label={chosen ? `Tirar a linha ${lineId} das minhas` : `Juntar a linha ${lineId} às minhas`}
+    >
+      <Star size={15} className={chosen ? 'fill-carris-yellow text-carris-yellow' : 'text-gray-500'} />
+    </button>
+  );
+}
+
+function MissingLineRow({ lineId, onToggle }: { lineId: string; onToggle: (lineId: string) => void }) {
+  return (
+    <li className="px-4 py-3 border-b border-white/5 last:border-0">
+      <div className="flex items-center gap-2">
+        <span className="shrink-0 px-2 py-1 rounded-lg bg-white/10 text-gray-300 text-xs font-black tabular-nums">
+          {lineId}
+        </span>
+        <p className="flex-1 min-w-0 text-[11px] text-gray-500 truncate">Ainda sem passagens observadas</p>
+        <FavouriteStar lineId={lineId} chosen onToggle={onToggle} />
+      </div>
+    </li>
+  );
+}
+
+function LineRow({ line, chosen, onToggle }: { line: RankedLine; chosen: boolean; onToggle: (lineId: string) => void }) {
   const percent = punctualityPercent(line);
 
   return (
     <li className="px-4 py-3 border-b border-white/5 last:border-0">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <span className="shrink-0 px-2 py-1 rounded-lg bg-carris-yellow text-carris-dark text-xs font-black tabular-nums">
           {line.lineId}
         </span>
@@ -38,7 +67,9 @@ function LineRow({ line }: { line: RankedLine }) {
           </p>
         </div>
 
-        <span className="shrink-0 w-11 text-right text-sm font-bold text-white tabular-nums">{percent}%</span>
+        <span className="shrink-0 w-10 text-right text-sm font-bold text-white tabular-nums">{percent}%</span>
+
+        <FavouriteStar lineId={line.lineId} chosen={chosen} onToggle={onToggle} />
       </div>
     </li>
   );
@@ -48,6 +79,8 @@ export default function ReliabilityPanel() {
   const [openedAtUnix, setOpenedAtUnix] = useState(0);
   const open = openedAtUnix > 0;
   const { ranking, failed, isLoading, available } = useLineRanking(open);
+  const { favoriteLines, toggle, isFavoriteLine } = useFavoriteLines();
+  const split = splitByFavourites(ranking?.lines ?? [], favoriteLines);
 
   if (!available) return null;
 
@@ -117,11 +150,36 @@ export default function ReliabilityPanel() {
               )}
 
               {ranking && ranking.lines.length > 0 && (
-                <ul>
-                  {ranking.lines.map(line => (
-                    <LineRow key={line.lineId} line={line} />
-                  ))}
-                </ul>
+                <>
+                  {(split.mine.length > 0 || split.missing.length > 0) && (
+                    <>
+                      <h3 className="px-4 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wide text-carris-yellow/70">
+                        As minhas linhas
+                      </h3>
+                      <ul>
+                        {split.mine.map(line => (
+                          <LineRow key={line.lineId} line={line} chosen onToggle={toggle} />
+                        ))}
+                        {split.missing.map(lineId => (
+                          <MissingLineRow key={lineId} lineId={lineId} onToggle={toggle} />
+                        ))}
+                      </ul>
+                      <h3 className="px-4 pt-4 pb-1 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                        Todas as linhas
+                      </h3>
+                    </>
+                  )}
+                  <ul>
+                    {split.rest.map(line => (
+                      <LineRow
+                        key={line.lineId}
+                        line={line}
+                        chosen={isFavoriteLine(line.lineId)}
+                        onToggle={toggle}
+                      />
+                    ))}
+                  </ul>
+                </>
               )}
             </div>
           </div>

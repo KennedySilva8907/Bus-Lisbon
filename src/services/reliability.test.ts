@@ -5,6 +5,7 @@ import {
   describeSpan,
   describeToleranceLabel,
   punctualityPercent,
+  splitByFavourites,
   type RankedLine,
 } from './reliability';
 
@@ -77,5 +78,31 @@ describe('describeFreshness', () => {
 
   it('counts the days when the job has not run', () => {
     expect(describeFreshness(Date.parse('2026-08-16T01:30:00Z') / 1000, now)).toBe('Actualizado há 3 dias');
+  });
+});
+
+describe('splitByFavourites', () => {
+  const ranked = [line({ lineId: '1005' }), line({ lineId: '1702' }), line({ lineId: '2222' })];
+
+  it('pulls the chosen lines out and keeps the rest in order', () => {
+    const split = splitByFavourites(ranked, ['2222', '1005']);
+
+    expect(split.mine.map(l => l.lineId)).toEqual(['1005', '2222']);
+    expect(split.rest.map(l => l.lineId)).toEqual(['1702']);
+  });
+
+  it('reports a chosen line that has no number yet instead of dropping it', () => {
+    const split = splitByFavourites(ranked, ['1005', '9999']);
+
+    expect(split.missing).toEqual(['9999']);
+    expect(split.mine.map(l => l.lineId)).toEqual(['1005']);
+  });
+
+  it('leaves everything in the rest when nothing is chosen', () => {
+    const split = splitByFavourites(ranked, []);
+
+    expect(split.mine).toEqual([]);
+    expect(split.missing).toEqual([]);
+    expect(split.rest).toHaveLength(3);
   });
 });

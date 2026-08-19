@@ -18,6 +18,22 @@ export interface LineRanking {
   lines: RankedLine[];
 }
 
+export interface SplitRanking {
+  mine: RankedLine[];
+  missing: string[];
+  rest: RankedLine[];
+}
+
+export function splitByFavourites(lines: RankedLine[], favourites: string[]): SplitRanking {
+  const chosen = new Set(favourites);
+
+  return {
+    mine: lines.filter(line => chosen.has(line.lineId)),
+    missing: favourites.filter(id => !lines.some(line => line.lineId === id)),
+    rest: lines.filter(line => !chosen.has(line.lineId)),
+  };
+}
+
 export function punctualityPercent(line: RankedLine): number {
   return line.passages === 0 ? 0 : Math.round((line.withinTolerance / line.passages) * 100);
 }

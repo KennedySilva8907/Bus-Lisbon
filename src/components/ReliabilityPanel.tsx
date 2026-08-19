@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChartNoAxesColumn, X } from 'lucide-react';
 import {
   describeAverage,
@@ -59,7 +60,7 @@ export default function ReliabilityPanel() {
         <ChartNoAxesColumn size={18} className="text-white/95" />
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
           className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-auto"
           style={{
@@ -120,7 +121,8 @@ export default function ReliabilityPanel() {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

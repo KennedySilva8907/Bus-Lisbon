@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   describeAverage,
   describeFreshness,
-  describeSpan,
+  describeServiceWindow,
+  describeTrust,
   describeToleranceLabel,
   punctualityPercent,
   splitByFavourites,
@@ -42,20 +43,6 @@ describe('describeAverage', () => {
 
   it('does not call half a minute a delay', () => {
     expect(describeAverage(-20)).toBe('à tabela');
-  });
-});
-
-describe('describeSpan', () => {
-  it('counts both ends of the window', () => {
-    expect(describeSpan('2026-08-18', '2026-08-19')).toBe('em 2 dias');
-  });
-
-  it('says a single day when the line was only seen once', () => {
-    expect(describeSpan('2026-08-19', '2026-08-19')).toBe('num dia');
-  });
-
-  it('handles a full window', () => {
-    expect(describeSpan('2026-07-21', '2026-08-19')).toBe('em 30 dias');
   });
 });
 
@@ -104,5 +91,40 @@ describe('splitByFavourites', () => {
     expect(split.mine).toEqual([]);
     expect(split.missing).toEqual([]);
     expect(split.rest).toHaveLength(3);
+  });
+});
+
+describe('describeTrust', () => {
+  it('calls a line very reliable from 90 up', () => {
+    expect(describeTrust(90).label).toBe('Muito fiável');
+    expect(describeTrust(100).level).toBe('high');
+  });
+
+  it('does not promote 89 to the top band', () => {
+    expect(describeTrust(89).label).toBe('Fiável');
+  });
+
+  it('calls the middle band uneven', () => {
+    expect(describeTrust(50).label).toBe('Irregular');
+    expect(describeTrust(69).level).toBe('uneven');
+  });
+
+  it('is blunt below half', () => {
+    expect(describeTrust(49).label).toBe('Pouco fiável');
+    expect(describeTrust(7).level).toBe('low');
+  });
+});
+
+describe('describeServiceWindow', () => {
+  it('reads a range inside one month', () => {
+    expect(describeServiceWindow('2026-08-18', '2026-08-19')).toBe('18 a 19 de agosto');
+  });
+
+  it('names a single day once', () => {
+    expect(describeServiceWindow('2026-08-19', '2026-08-19')).toBe('19 de agosto');
+  });
+
+  it('spells both months when the window crosses one', () => {
+    expect(describeServiceWindow('2026-07-28', '2026-08-19')).toBe('28 de julho a 19 de agosto');
   });
 });

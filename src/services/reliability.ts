@@ -38,20 +38,44 @@ export function punctualityPercent(line: RankedLine): number {
   return line.passages === 0 ? 0 : Math.round((line.withinTolerance / line.passages) * 100);
 }
 
+export type TrustLevel = 'high' | 'good' | 'uneven' | 'low';
+
+export interface Trust {
+  level: TrustLevel;
+  label: string;
+}
+
+export function describeTrust(percent: number): Trust {
+  if (percent >= 90) return { level: 'high', label: 'Muito fiável' };
+  if (percent >= 70) return { level: 'good', label: 'Fiável' };
+  if (percent >= 50) return { level: 'uneven', label: 'Irregular' };
+
+  return { level: 'low', label: 'Pouco fiável' };
+}
+
+const MONTHS = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+];
+
+export function describeServiceWindow(firstServiceDate: string, lastServiceDate: string): string {
+  const [, firstMonth, firstDay] = firstServiceDate.split('-').map(Number);
+  const [, lastMonth, lastDay] = lastServiceDate.split('-').map(Number);
+
+  if (firstServiceDate === lastServiceDate) return `${firstDay} de ${MONTHS[firstMonth - 1]}`;
+  if (firstMonth === lastMonth) return `${firstDay} a ${lastDay} de ${MONTHS[lastMonth - 1]}`;
+
+  return `${firstDay} de ${MONTHS[firstMonth - 1]} a ${lastDay} de ${MONTHS[lastMonth - 1]}`;
+}
+
+export const THIN_EVIDENCE = 50;
+
 export function describeAverage(averageLatenessSeconds: number): string {
   const minutes = Math.round(Math.abs(averageLatenessSeconds) / 60);
 
   if (minutes === 0) return 'à tabela';
 
   return averageLatenessSeconds > 0 ? `${minutes} min atrasada` : `${minutes} min adiantada`;
-}
-
-export function describeSpan(firstServiceDate: string, lastServiceDate: string): string {
-  const first = Date.parse(`${firstServiceDate}T00:00:00Z`);
-  const last = Date.parse(`${lastServiceDate}T00:00:00Z`);
-  const days = Math.round((last - first) / 86_400_000) + 1;
-
-  return days === 1 ? 'num dia' : `em ${days} dias`;
 }
 
 export function describeToleranceLabel(toleranceSeconds: number): string {

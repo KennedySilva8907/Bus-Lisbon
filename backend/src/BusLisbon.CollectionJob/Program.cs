@@ -1,0 +1,58 @@
+using BusLisbon.Api.Carris;
+using BusLisbon.Api.Observations;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+
+namespace BusLisbon.CollectionJob;
+
+public static class ArrivalCollectionJob
+{
+    private const string ConnectionName = "Observations";
+
+    public static async Task<int> Main(string[] args)
+    {
+        var builder = Host.CreateApplicationBuilder(args);
+
+        builder.Services.AddSingleton(TimeProvider.System);
+        CarrisClient.AddCarrisClient(builder.Services, builder.Configuration);
+        builder.Services.Configure<CollectionOptions>(
+            builder.Configuration.GetSection(CollectionOptions.SectionName));
+        builder.Services.AddDbContext<ObservationsContext>(options => options
+            .UseSqlServer(
+                builder.Configuration.GetConnectionString(ConnectionName),
+                sql => sql.EnableRetryOnFailure(maxRetryCount: 8, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null)));
+        builder.Services.AddScoped<ArrivalCollector>();
+
+        using var host = builder.Build();
+        using var scope = host.Services.CreateScope();
+
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<CollectionReport>>();
+        var started = TimeProvider.System.GetTimestamp();
+
+        try
+        {
+            var collector = scope.ServiceProvider.GetRequiredService<ArrivalCollector>();
+            var report = await collector.CollectOnceAsync(SampleStops.All, CancellationToken.None);
+
+            logger.LogInformation(
+                "Read {StopsRead} of {StopsTotal} stops in {Elapsed}s: {Seen} passages seen, {Written} written, {StopsFailed} stops unavailable",
+                report.StopsRead,
+                SampleStops.All.Count,
+                (int)TimeProvider.System.GetElapsedTime(started).TotalSeconds,
+                report.Seen,
+                report.Written,
+                report.StopsFailed);
+
+            return 0;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "The arrival collection could not run");
+
+            return 1;
+        }
+    }
+}

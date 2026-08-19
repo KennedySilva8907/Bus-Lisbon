@@ -4,18 +4,26 @@ WORKDIR /source
 COPY BusLisbon.sln .
 COPY src/BusLisbon.Api/BusLisbon.Api.csproj src/BusLisbon.Api/
 COPY src/BusLisbon.AlertJob/BusLisbon.AlertJob.csproj src/BusLisbon.AlertJob/
+COPY src/BusLisbon.CollectionJob/BusLisbon.CollectionJob.csproj src/BusLisbon.CollectionJob/
 COPY tests/BusLisbon.Api.Tests/BusLisbon.Api.Tests.csproj tests/BusLisbon.Api.Tests/
 RUN dotnet restore
 
 COPY . .
 RUN dotnet publish src/BusLisbon.Api/BusLisbon.Api.csproj -c Release -o /app/api
 RUN dotnet publish src/BusLisbon.AlertJob/BusLisbon.AlertJob.csproj -c Release -o /app/job
+RUN dotnet publish src/BusLisbon.CollectionJob/BusLisbon.CollectionJob.csproj -c Release -o /app/collector
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS job
 WORKDIR /app
 COPY --from=build /app/job .
 
 ENTRYPOINT ["dotnet", "BusLisbon.AlertJob.dll"]
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS collector
+WORKDIR /app
+COPY --from=build /app/collector .
+
+ENTRYPOINT ["dotnet", "BusLisbon.CollectionJob.dll"]
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app

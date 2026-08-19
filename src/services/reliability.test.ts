@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   describeAverage,
   describeFreshness,
+  describeSpan,
   describeToleranceLabel,
   punctualityPercent,
   type RankedLine,
@@ -43,6 +44,20 @@ describe('describeAverage', () => {
   });
 });
 
+describe('describeSpan', () => {
+  it('counts both ends of the window', () => {
+    expect(describeSpan('2026-08-18', '2026-08-19')).toBe('em 2 dias');
+  });
+
+  it('says a single day when the line was only seen once', () => {
+    expect(describeSpan('2026-08-19', '2026-08-19')).toBe('num dia');
+  });
+
+  it('handles a full window', () => {
+    expect(describeSpan('2026-07-21', '2026-08-19')).toBe('em 30 dias');
+  });
+});
+
 describe('describeToleranceLabel', () => {
   it('turns the tolerance into minutes', () => {
     expect(describeToleranceLabel(300)).toBe('dentro de 5 min do horário');
@@ -53,14 +68,14 @@ describe('describeFreshness', () => {
   const now = Date.parse('2026-08-19T12:00:00Z') / 1000;
 
   it('says nothing has been computed yet', () => {
-    expect(describeFreshness(0, now)).toBe('ainda sem dados');
+    expect(describeFreshness(0, now)).toBe('Ainda sem dados');
   });
 
   it('reads a summary from this morning as today', () => {
-    expect(describeFreshness(Date.parse('2026-08-19T01:30:00Z') / 1000, now)).toBe('actualizado hoje');
+    expect(describeFreshness(Date.parse('2026-08-19T01:30:00Z') / 1000, now)).toBe('Actualizado hoje');
   });
 
   it('counts the days when the job has not run', () => {
-    expect(describeFreshness(Date.parse('2026-08-16T01:30:00Z') / 1000, now)).toBe('actualizado há 3 dias');
+    expect(describeFreshness(Date.parse('2026-08-16T01:30:00Z') / 1000, now)).toBe('Actualizado há 3 dias');
   });
 });

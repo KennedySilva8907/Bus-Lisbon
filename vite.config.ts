@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/gw': {
-        target: 'http://localhost:5199',
+        target: process.env.VITE_GATEWAY_PROXY_TARGET || 'http://localhost:5199',
         changeOrigin: true,
         ws: true,
         rewrite: (path) => path.replace(/^\/gw/, ''),

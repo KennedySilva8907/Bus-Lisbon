@@ -1,5 +1,6 @@
 using BusLisbon.Api.Carris;
 using BusLisbon.Api.Observations;
+using BusLisbon.Api.Reliability;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,11 +21,15 @@ public static class ArrivalCollectionJob
         CarrisClient.AddCarrisClient(builder.Services, builder.Configuration);
         builder.Services.Configure<CollectionOptions>(
             builder.Configuration.GetSection(CollectionOptions.SectionName));
+        builder.Services.Configure<ReliabilityOptions>(
+            builder.Configuration.GetSection(ReliabilityOptions.SectionName));
         builder.Services.AddDbContext<ObservationsContext>(options => options
             .UseSqlServer(
                 builder.Configuration.GetConnectionString(ConnectionName),
                 sql => sql.EnableRetryOnFailure(maxRetryCount: 8, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null)));
         builder.Services.AddScoped<ArrivalCollector>();
+        builder.Services.AddScoped<LinePunctualityQuery>();
+        builder.Services.AddScoped<LineSummaryWriter>();
 
         using var host = builder.Build();
         using var scope = host.Services.CreateScope();
@@ -45,6 +50,11 @@ public static class ArrivalCollectionJob
                 report.Seen,
                 report.Written,
                 report.StopsFailed);
+
+            var writer = scope.ServiceProvider.GetRequiredService<LineSummaryWriter>();
+            var summary = await writer.RewriteAsync(CancellationToken.None);
+
+            logger.LogInformation("Summarised {Lines} lines", summary.Lines);
 
             return 0;
         }

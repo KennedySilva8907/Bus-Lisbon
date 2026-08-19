@@ -17,10 +17,6 @@ export interface StreamConnection {
   onclose(callback: () => void): void;
 }
 
-// A reconnect is a new connection with a new id, and the server keys its groups
-// by that id — so a reconnected client belongs to no group until it asks again.
-// `live` only turns true once the subscription itself resolves: reporting it
-// any earlier tells the caller to stop polling a stream that sends nothing.
 export function openVehicleStream(
   connection: StreamConnection,
   target: StreamTarget,
@@ -42,10 +38,6 @@ export function openVehicleStream(
   return connection.start().then(subscribe, () => onLive(false));
 }
 
-// SignalR negotiates its own transport: WebSockets, then Server-Sent Events,
-// then long polling. What it cannot survive is a network that blocks all three,
-// or iOS suspending the connection when the phone locks — hence `connected`,
-// which the caller uses to fall back to polling.
 export function useVehicleStream(
   vehicleId: string | null,
   lineId?: string | null,
@@ -82,20 +74,12 @@ export function useVehicleStream(
     };
   }, [enabled, target, vehicleId, lineId, patternId]);
 
-  // Both values are derived rather than written back from the effect. Two
-  // reasons: writing state inside an effect body causes a second render for
-  // nothing, and a position that arrived for the previous bus must never be
-  // shown as the new one — so a reading only counts while its target is still
-  // the one being tracked.
   return {
     vehicle: enabled && received?.target === target ? received.vehicle : null,
     connected: enabled && liveTarget === target,
   };
 }
 
-// The last streamed position outlives the connection that delivered it, so it
-// must not win once that connection is gone — otherwise the fallback poll runs
-// and paints nothing.
 export function freshestVehicle(
   streamed: Vehicle | null,
   connected: boolean,

@@ -8,9 +8,6 @@ export interface ArrivalDescription {
   label: string;
 }
 
-// Only an arrival that names a vehicle can be followed. Without one the
-// operator does not know which bus is doing this trip, and neither do we —
-// showing another bus from the same line looks like an answer and is not one.
 export function describeArrival(eta: ETA): ArrivalDescription {
   if (eta.vehicle_id) {
     return { state: 'boarding', trackable: true, label: 'Em viagem' };

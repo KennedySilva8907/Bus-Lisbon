@@ -81,7 +81,6 @@ public class ObservedPassagesTests
     [Fact]
     public void TheServiceDateIsTheLisbonDateNotUtc()
     {
-        // 23:30 UTC in August is already 00:30 of the next day in Lisbon.
         var lateNight = DateTimeOffset.Parse("2026-08-18T23:30:00+00:00").ToUnixTimeSeconds();
 
         var passages = From(Arrival(lateNight, observed: lateNight + 60));

@@ -4,6 +4,7 @@ import { ChartNoAxesColumn, X } from 'lucide-react';
 import {
   describeAverage,
   describeFreshness,
+  describeSpan,
   describeToleranceLabel,
   punctualityPercent,
   useLineRanking,
@@ -32,7 +33,8 @@ function LineRow({ line }: { line: RankedLine }) {
             <div className={`h-full ${barColour(percent)}`} style={{ width: `${percent}%` }} />
           </div>
           <p className="mt-1.5 text-[11px] text-gray-400 truncate">
-            {describeAverage(line.averageLatenessSeconds)} · {line.passages} passagens
+            {describeAverage(line.averageLatenessSeconds)} · {line.passages} passagens{' '}
+            {describeSpan(line.firstServiceDate, line.lastServiceDate)}
           </p>
         </div>
 
@@ -91,9 +93,11 @@ export default function ReliabilityPanel() {
 
             {ranking && ranking.lines.length > 0 && (
               <p className="px-4 py-3 text-[11px] leading-relaxed text-gray-400 border-b border-white/5">
-                A percentagem é a fatia de passagens que chegou {describeToleranceLabel(ranking.toleranceSeconds)}
-                {' '}publicado. Comparamos a hora a que o autocarro passou mesmo com a hora da tabela, não com a
-                previsão da app. {describeFreshness(ranking.computedAtUnix, openedAtUnix)}.
+                Uma passagem é um autocarro a passar numa das paragens que vigiamos, e uma linha serve várias —
+                por isso os números sobem depressa. A percentagem é a fatia dessas passagens que chegou{' '}
+                {describeToleranceLabel(ranking.toleranceSeconds)} publicado, comparando a hora a que o autocarro
+                passou mesmo com a hora da tabela e não com a previsão da app.{' '}
+                {describeFreshness(ranking.computedAtUnix, openedAtUnix)}.
               </p>
             )}
 

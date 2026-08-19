@@ -1,3 +1,4 @@
+using BusLisbon.Api.Alerts;
 using BusLisbon.Api.Carris;
 using BusLisbon.Api.Observations;
 using BusLisbon.Api.Reliability;
@@ -19,6 +20,7 @@ public static class ArrivalCollectionJob
 
         builder.Services.AddSingleton(TimeProvider.System);
         CarrisClient.AddCarrisClient(builder.Services, builder.Configuration);
+        UpstashKeyValueStore.AddUpstash(builder.Services, builder.Configuration);
         builder.Services.Configure<CollectionOptions>(
             builder.Configuration.GetSection(CollectionOptions.SectionName));
         builder.Services.Configure<ReliabilityOptions>(
@@ -30,6 +32,7 @@ public static class ArrivalCollectionJob
         builder.Services.AddScoped<ArrivalCollector>();
         builder.Services.AddScoped<LinePunctualityQuery>();
         builder.Services.AddScoped<LineSummaryWriter>();
+        builder.Services.AddScoped<LineRankingPublisher>();
 
         using var host = builder.Build();
         using var scope = host.Services.CreateScope();
@@ -51,10 +54,19 @@ public static class ArrivalCollectionJob
                 report.Written,
                 report.StopsFailed);
 
-            var writer = scope.ServiceProvider.GetRequiredService<LineSummaryWriter>();
-            var summary = await writer.RewriteAsync(CancellationToken.None);
+            var lines = await scope.ServiceProvider
+                .GetRequiredService<LinePunctualityQuery>()
+                .RunAsync(CancellationToken.None);
 
-            logger.LogInformation("Summarised {Lines} lines", summary.Lines);
+            await scope.ServiceProvider
+                .GetRequiredService<LineSummaryWriter>()
+                .RewriteAsync(lines, CancellationToken.None);
+
+            await scope.ServiceProvider
+                .GetRequiredService<LineRankingPublisher>()
+                .PublishAsync(lines, CancellationToken.None);
+
+            logger.LogInformation("Summarised and published {Lines} lines", lines.Count);
 
             return 0;
         }

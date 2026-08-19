@@ -5,14 +5,11 @@ namespace BusLisbon.Api.Reliability;
 
 public sealed record SummaryReport(int Lines);
 
-public sealed class LineSummaryWriter(
-    ObservationsContext database,
-    LinePunctualityQuery query,
-    TimeProvider time)
+public sealed class LineSummaryWriter(ObservationsContext database, TimeProvider time)
 {
-    public async Task<SummaryReport> RewriteAsync(CancellationToken cancellationToken)
+    public async Task<SummaryReport> RewriteAsync(
+        IReadOnlyList<LinePunctuality> lines, CancellationToken cancellationToken)
     {
-        var lines = await query.RunAsync(cancellationToken);
         var computedAt = time.GetUtcNow().ToUnixTimeSeconds();
 
         await database.LineReliability.ExecuteDeleteAsync(cancellationToken);

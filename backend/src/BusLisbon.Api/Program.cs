@@ -33,6 +33,7 @@ app.MapHealthEndpoints();
 app.MapVehicleEndpoints();
 app.MapAlertEndpoints();
 app.MapAlertDiagnosticsEndpoints();
+app.MapLineReliabilityEndpoints();
 app.MapHub<VehicleHub>("/hubs/vehicles");
 
 app.Run();

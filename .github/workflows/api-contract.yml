@@ -58,6 +58,6 @@ jobs:
                 '',
                 `**Failing run:** ${runUrl}`,
                 '',
-                'Open the run logs to see exactly which check failed, then update `src/services/api.ts` (and `api/cron-check-alerts.ts` if ETAs are involved) accordingly.',
+                'Open the run logs to see exactly which check failed, then update `src/services/api.ts` (and `backend/src/BusLisbon.Api/Carris/` if arrivals or vehicles are involved) accordingly.',
               ].join('\n'),
             });

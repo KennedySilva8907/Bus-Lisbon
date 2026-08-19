@@ -27,10 +27,21 @@ function warn(check, detail) {
   warnings.push({ check, detail });
 }
 
+const UPSTREAM_ATTEMPTS = 3;
+
 async function getJson(path) {
-  const res = await fetch(`${BASE}${path}`, { headers: { accept: 'application/json' } });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}`);
-  return res.json();
+  let lastStatus = 0;
+
+  for (let attempt = 1; attempt <= UPSTREAM_ATTEMPTS; attempt++) {
+    const res = await fetch(`${BASE}${path}`, { headers: { accept: 'application/json' } });
+    if (res.ok) return res.json();
+
+    lastStatus = res.status;
+    if (res.status < 500) break;
+    if (attempt < UPSTREAM_ATTEMPTS) await new Promise(r => setTimeout(r, attempt * 2000));
+  }
+
+  throw new Error(`HTTP ${lastStatus} for ${path}${lastStatus >= 500 ? ` after ${UPSTREAM_ATTEMPTS} attempts` : ''}`);
 }
 
 function isFiniteNum(v) {
@@ -93,15 +104,15 @@ async function checkVehicles() {
   if (withStop) discovered.stopId = String(withStop.stop_id);
 }
 
-// ── 2. Stop arrivals / ETAs (/v2/arrivals/by_stop/:id) ─────────────────
+// ── 2. Stop arrivals / ETAs (/stops/:id/realtime) ─────────────────
 async function checkArrivals() {
-  const name = '/v2/arrivals/by_stop/:id';
+  const name = '/stops/:id/realtime';
   const stopId = discovered.stopId || '170453';
   let data;
   try {
-    data = await getJson(`/v2/arrivals/by_stop/${stopId}`);
+    data = await getJson(`/stops/${stopId}/realtime`);
   } catch (e) {
-    fail(name, `${e.message} (this endpoint powers the ETA panel and push alerts)`);
+    fail(name, `${e.message} (this endpoint powers the ETA panel, the alerts and the daily collection)`);
     return;
   }
   if (!Array.isArray(data)) {
@@ -116,6 +127,29 @@ async function checkArrivals() {
   const sample = data[0];
   const missing = required.filter(k => !(k in sample));
   if (missing.length) fail(name, `arrival is missing fields: ${missing.join(', ')}`);
+
+  const observed = data.filter(a => isFiniteNum(a.observed_arrival_unix));
+  if (observed.length === 0) {
+    warn(name, `no passage at stop ${stopId} carries observed_arrival_unix right now — the daily collection would store nothing for it`);
+  }
+}
+
+// ── 2b. Is /v2/arrivals/by_stop usable again? (migration readiness) ──
+async function checkV2ArrivalsReadiness() {
+  const name = '/v2/arrivals/by_stop (migration readiness)';
+  const stopId = discovered.stopId || '170453';
+  try {
+    const data = await getJson(`/v2/arrivals/by_stop/${stopId}`);
+    if (Array.isArray(data) && data.length) {
+      const prefixed = data.filter(a => typeof a.line_id === 'string' && a.line_id.startsWith('[')).length;
+      const withEstimate = data.filter(a => isFiniteNum(a.estimated_arrival_unix)).length;
+      if (prefixed === 0 && withEstimate > 0) {
+        warn(name, `v2 arrivals answered with clean line ids and ${withEstimate} live estimates — worth re-testing the migration`);
+      }
+    }
+  } catch {
+    // non-critical
+  }
 }
 
 // ── 3. Stops (/stops) — the app needs populated names ──────────────────
@@ -197,7 +231,7 @@ async function checkV2StopsReadiness() {
 
 async function main() {
   await checkVehicles();
-  await Promise.all([checkArrivals(), checkStops(), checkPatternShape(), checkV2StopsReadiness()]);
+  await Promise.all([checkArrivals(), checkStops(), checkPatternShape(), checkV2StopsReadiness(), checkV2ArrivalsReadiness()]);
 
   console.log('\nCarris API contract check —', new Date().toISOString());
   console.log('='.repeat(60));

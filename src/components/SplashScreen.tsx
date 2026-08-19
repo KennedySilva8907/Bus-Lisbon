@@ -4,22 +4,6 @@ interface SplashScreenProps {
   fading: boolean;
 }
 
-/**
- * Splash screen — "Edge" layout.
- *
- * Phone: the portrait artwork fills the screen edge-to-edge. A gradient lifts
- * the bottom into pure black where the wordmark, coordinates, and progress
- * bar sit.
- *
- * Screens wider than they are tall get the landscape artwork instead, and the
- * title stack is held to a column on the left so it does not stretch across
- * a wide monitor. The choice follows the shape of the viewport, not its
- * width: a tablet held upright keeps the portrait artwork.
- *
- * Progress eases toward 92 % via a 1 − e^(−t/τ) curve while the app boots,
- * then snaps to 100 % the moment the parent triggers the fade — the user
- * sees a confident "done", not "cancelled mid-load".
- */
 export default function SplashScreen({ fading }: SplashScreenProps) {
   const [progress, setProgress] = useState(0);
 
@@ -63,7 +47,6 @@ export default function SplashScreen({ fading }: SplashScreenProps) {
           />
         </picture>
 
-        {/* Gradient lifts the lower band into black for legibility */}
         <div
           aria-hidden="true"
           className="absolute bottom-0 left-0 right-0 pointer-events-none"
@@ -74,8 +57,6 @@ export default function SplashScreen({ fading }: SplashScreenProps) {
           }}
         />
 
-        {/* On a wide screen the artwork is bright where the title sits, so the
-          * left edge is darkened as well. */}
         <div
           aria-hidden="true"
           className="hidden landscape:block absolute inset-y-0 left-0 w-2/3 pointer-events-none"
@@ -85,7 +66,6 @@ export default function SplashScreen({ fading }: SplashScreenProps) {
           }}
         />
 
-        {/* Title stack */}
         <div
           className="absolute left-0 right-0 px-5 sm:px-7 md:px-14 landscape:max-w-2xl"
           style={{ bottom: 'max(28px, env(safe-area-inset-bottom, 0px) + 16px)' }}

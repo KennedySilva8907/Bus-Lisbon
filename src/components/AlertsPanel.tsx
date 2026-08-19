@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Bell, X, Trash2 } from 'lucide-react';
 import { useAlerts } from '../hooks/useAlerts';
 
@@ -29,7 +30,7 @@ export default function AlertsPanel() {
         )}
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
           className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-auto"
           style={{
@@ -95,7 +96,8 @@ export default function AlertsPanel() {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

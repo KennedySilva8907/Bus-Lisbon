@@ -4,7 +4,7 @@ import VectorMap from './components/VectorMap';
 import StopDetailsPanel from './components/StopDetailsPanel';
 import SearchBar from './components/SearchBar';
 import SplashScreen from './components/SplashScreen';
-import { usePattern, useStops } from './services/api';
+import { usePattern, useSingleVehicle, useStops } from './services/api';
 import type { Stop } from './services/api';
 import { useFavorites } from './hooks/useFavorites';
 import { usesVectorMap } from './services/basemap';
@@ -25,6 +25,11 @@ function App() {
   });
   const { favorites, toggle: toggleFavorite, isFavorite } = useFavorites();
   const route = usePattern(usesVectorMap() ? selectedPatternId : null);
+  const { vehicle } = useSingleVehicle(
+    usesVectorMap() ? selectedVehicleId : null,
+    usesVectorMap() ? selectedLineId : null,
+    usesVectorMap() ? selectedPatternId : null
+  );
 
   // Notification-click target: a stop the user came in to see. Resolved once
   // stops finish loading (we get just the id from the URL or SW message).
@@ -146,6 +151,7 @@ function App() {
             stops={stops}
             selectedStop={selectedStop}
             route={route}
+            vehicle={vehicle}
             isDarkMap={isDarkMap}
             onStopSelect={handleStopSelect}
           />

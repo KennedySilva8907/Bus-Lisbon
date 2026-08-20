@@ -233,22 +233,3 @@ export function usePattern(patternId?: string | null) {
   }), [data, shapeData]);
 }
 
-export function usePatternShape(patternId?: string | null) {
-  const { data: patternData } = useSWR(
-    patternId ? `${API_BASE_URL}/patterns/${patternId}` : null, 
-    fetcher,
-    { revalidateOnFocus: false, revalidateIfStale: false, dedupingInterval: 86400000 }
-  );
-  
-  const shapeId = patternData?.shape_id;
-  const { data: shapeData } = useSWR(
-    shapeId ? `${API_BASE_URL}/shapes/${shapeId}` : null, 
-    fetcher,
-    { revalidateOnFocus: false, revalidateIfStale: false, dedupingInterval: 86400000 }
-  );
-
-  return {
-    shape: shapeData?.geojson?.geometry?.coordinates || [],
-    isLoading: !shapeData && !!patternId
-  };
-}

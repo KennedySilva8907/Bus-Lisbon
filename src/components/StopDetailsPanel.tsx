@@ -8,6 +8,7 @@ import { useFavoriteLines } from '../hooks/useFavoriteLines';
 import NotificationBell from './NotificationBell';
 import FavouriteLineStar from './FavouriteLineStar';
 import AlertSetupModal from './AlertSetupModal';
+import { PANEL_ELEMENT_ID } from '../services/framing';
 
 interface StopDetailsPanelProps {
   stop: Stop | null;
@@ -133,6 +134,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
 
   return (
     <aside
+      id={PANEL_ELEMENT_ID}
       ref={panelRef}
       className={`absolute bottom-0 w-full md:relative md:h-full md:w-96 bg-carris-gray z-[1000] shadow-[0_-10px_40px_rgba(0,0,0,0.5)] flex-shrink-0 flex flex-col rounded-t-3xl md:rounded-l-3xl md:rounded-tr-none transition-transform duration-300 ease-in-out ${
         isExpanded ? 'h-[55%] translate-y-0' : 'h-[55%] translate-y-[calc(100%-80px)] md:translate-y-0'

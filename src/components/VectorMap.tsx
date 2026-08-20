@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { AttributionControl, Map as MapLibreMap, type GeoJSONSource, type MapGeoJSONFeature } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { LISBON, basemapStyle } from '../services/basemap';
@@ -54,6 +54,13 @@ import {
   vehicleSize,
   type Placed,
 } from '../services/vehicleLayer';
+import {
+  PANEL_ELEMENT_ID,
+  PANEL_SETTLE_MS,
+  coveredHeight,
+  frameAround,
+  framePadding,
+} from '../services/framing';
 import type { Stop, Vehicle } from '../services/api';
 
 export interface SelectedRoute {
@@ -68,6 +75,8 @@ interface VectorMapProps {
   selectedStop: Stop | null;
   route: SelectedRoute;
   vehicle: Vehicle | null;
+  panelOpen: boolean;
+  panelExpanded: boolean;
   isDarkMap: boolean;
   onStopSelect: (stop: Stop) => void;
 }
@@ -240,6 +249,8 @@ export default function VectorMap({
   selectedStop,
   route,
   vehicle,
+  panelOpen,
+  panelExpanded,
   isDarkMap,
   onStopSelect,
 }: VectorMapProps) {
@@ -252,7 +263,12 @@ export default function VectorMap({
   const select = useRef(onStopSelect);
   const startedDark = useRef(isDarkMap);
   const drawnAt = useRef<Placed | null>(placeVehicle(vehicle));
+  const latest = useRef({ vehicle, selectedStop });
   const sliding = useRef(0);
+
+  useEffect(() => {
+    latest.current = { vehicle, selectedStop };
+  });
 
   useEffect(() => {
     select.current = onStopSelect;
@@ -332,6 +348,41 @@ export default function VectorMap({
 
     return () => cancelAnimationFrame(sliding.current);
   }, [vehicle]);
+
+  const fitToVehicle = useCallback(() => {
+    const instance = map.current;
+    const box = container.current?.getBoundingClientRect();
+    const bus = placeVehicle(latest.current.vehicle);
+
+    if (!instance || !box || !bus) return;
+
+    const chosen = latest.current.selectedStop;
+    const stop = chosen ? { lon: Number(chosen.lon), lat: Number(chosen.lat) } : null;
+    const frame = frameAround(stop ? [stop, bus] : [bus]);
+
+    if (!frame) return;
+
+    const panel = document.getElementById(PANEL_ELEMENT_ID)?.getBoundingClientRect() ?? null;
+
+    instance.fitBounds(
+      [[frame.southWest.lon, frame.southWest.lat], [frame.northEast.lon, frame.northEast.lat]],
+      {
+        padding: framePadding(box.width, box.height, coveredHeight(box, panel)),
+        duration: 900,
+        maxZoom: 17,
+      }
+    );
+  }, []);
+
+  useEffect(() => {
+    fitToVehicle();
+  }, [vehicle, selectedStop, fitToVehicle]);
+
+  useEffect(() => {
+    const timer = setTimeout(fitToVehicle, PANEL_SETTLE_MS);
+
+    return () => clearTimeout(timer);
+  }, [panelOpen, panelExpanded, fitToVehicle]);
 
   useEffect(() => {
     if (!container.current || map.current) return;

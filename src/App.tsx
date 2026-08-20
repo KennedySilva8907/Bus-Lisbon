@@ -152,6 +152,8 @@ function App() {
             selectedStop={selectedStop}
             route={route}
             vehicle={vehicle}
+            panelOpen={!!selectedStop}
+            panelExpanded={isPanelExpanded}
             isDarkMap={isDarkMap}
             onStopSelect={handleStopSelect}
           />

@@ -489,6 +489,11 @@ export default function VectorMap({
       return;
     }
 
+    if (watching.current) {
+      navigator.geolocation.clearWatch(watching.current);
+      watching.current = 0;
+    }
+
     navigator.geolocation.getCurrentPosition(
       position => {
         const found = readFix(position);
@@ -515,15 +520,9 @@ export default function VectorMap({
   }, [easeToPoint]);
 
   useEffect(() => {
-    let dropped = false;
-
-    readPermission().then(state => {
-      if (!dropped && state === 'granted') startWatching();
-    });
+    startWatching();
 
     return () => {
-      dropped = true;
-
       if (watching.current) navigator.geolocation.clearWatch(watching.current);
 
       watching.current = 0;

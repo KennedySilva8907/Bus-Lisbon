@@ -6,6 +6,7 @@ import {
   FRAME_TOP,
   coveredHeight,
   frameAround,
+  frameOffset,
   framePadding,
 } from './framing';
 
@@ -85,5 +86,15 @@ describe('framePadding', () => {
 
   it('drops the side margins on a narrow map rather than squeezing it flat', () => {
     expect(framePadding(180, 800, 0).left).toBe(20);
+  });
+});
+
+describe('frameOffset', () => {
+  it('pushes the target up by half of what the sheet covers', () => {
+    expect(frameOffset({ top: 96, bottom: 537, left: 40, right: 40 })).toEqual([0, -220.5]);
+  });
+
+  it('leaves the target in the middle when nothing covers the map', () => {
+    expect(frameOffset({ top: 0, bottom: 0, left: 0, right: 0 })).toEqual([0, 0]);
   });
 });

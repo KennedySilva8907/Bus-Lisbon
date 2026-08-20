@@ -61,6 +61,7 @@ import {
   PANEL_SETTLE_MS,
   coveredHeight,
   frameAround,
+  frameOffset,
   framePadding,
 } from '../services/framing';
 import {
@@ -425,11 +426,12 @@ export default function VectorMap({
     if (!instance || !box) return;
 
     const panel = document.getElementById(PANEL_ELEMENT_ID)?.getBoundingClientRect() ?? null;
+    const insets = framePadding(box.width, box.height, coveredHeight(box, panel));
 
     instance.easeTo({
       center: [point.lon, point.lat],
       zoom,
-      padding: framePadding(box.width, box.height, coveredHeight(box, panel)),
+      offset: frameOffset(insets),
       duration: 900,
     });
   }, []);

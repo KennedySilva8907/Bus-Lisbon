@@ -66,3 +66,7 @@ export function framePadding(width: number, height: number, covered: number): In
 
   return { top, bottom, left: side, right: side };
 }
+
+export function frameOffset(insets: Insets): [number, number] {
+  return [(insets.left - insets.right) / 2, (insets.top - insets.bottom) / 2];
+}

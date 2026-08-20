@@ -217,7 +217,7 @@ backend/
     BusLisbon.AlertJob/       cron job: due alerts -> web-push
     BusLisbon.CollectionJob/  cron job: passages -> SQL -> ranking
   tests/
-    BusLisbon.Api.Tests/      174 tests, SQLite in memory
+    BusLisbon.Api.Tests/      181 tests, SQLite in memory
 
 src/
   components/

@@ -3,6 +3,8 @@ import AlertsPanel from './AlertsPanel';
 import ReliabilityPanel from './ReliabilityPanel';
 
 interface MapControlsProps {
+  notice: string;
+  onDismissNotice: () => void;
   panelOpen: boolean;
   panelExpanded: boolean;
   isDarkMap: boolean;
@@ -20,6 +22,8 @@ function stackBottom(panelOpen: boolean, panelExpanded: boolean): CSSProperties 
 }
 
 export default function MapControls({
+  notice,
+  onDismissNotice,
   panelOpen,
   panelExpanded,
   isDarkMap,
@@ -30,9 +34,18 @@ export default function MapControls({
 }: MapControlsProps) {
   return (
     <div
-      className="absolute right-4 md:right-6 z-[1001] flex flex-col gap-3 items-center pointer-events-none transition-all duration-300"
+      className="absolute right-4 md:right-6 z-[1001] flex flex-col gap-3 items-end pointer-events-none transition-all duration-300"
       style={stackBottom(panelOpen, panelExpanded)}
     >
+      {notice && (
+        <div
+          className="pointer-events-auto max-w-[17rem] bg-carris-gray/95 backdrop-blur-md text-carris-light text-sm rounded-2xl px-4 py-3 shadow-2xl border border-white/10 cursor-pointer"
+          onClick={onDismissNotice}
+        >
+          {notice}
+        </div>
+      )}
+
       <AlertsPanel />
 
       <ReliabilityPanel />

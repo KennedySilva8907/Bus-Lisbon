@@ -6,6 +6,12 @@ Azure behind it, and it needs no account, no SMS and no money to use.
 
 **Live:** [buslisbon.vercel.app](https://buslisbon.vercel.app)
 
+<p align="center">
+  <img src="docs/screenshots/following-a-bus.png" width="270" alt="Following a bus towards a stop, with the arrivals list below">
+  &nbsp;
+  <img src="docs/screenshots/line-reliability.png" width="270" alt="Lines ranked by how often they keep to the timetable">
+</p>
+
 ---
 
 ## Why I built this
@@ -145,6 +151,12 @@ as a line with direction arrows drawn along it, the chosen stop as a pin, the
 bus as a rotated symbol, your own position as a dot. Taps are answered from
 what is actually drawn, so a stop under a route line is still the stop you hit.
 
+<p align="center">
+  <img src="docs/screenshots/the-map.png" width="270" alt="The route drawn on the dark map">
+  &nbsp;
+  <img src="docs/screenshots/light-theme.png" width="270" alt="The same route on the light map">
+</p>
+
 The cost is real and worth writing down: gzipped JavaScript went from 147 KB to
 345 KB, because MapLibre is much heavier than Leaflet. Loading the map lazily
 would win most of that back and is not done yet.
@@ -259,16 +271,6 @@ The proxy exists because the deployed API only allows its production origin.
 
 For the alerts you need VAPID keys and an Upstash database. See
 [`docs/PUSH_NOTIFICATIONS_SETUP.md`](docs/PUSH_NOTIFICATIONS_SETUP.md).
-
----
-
-## What I would build next
-
-- Load the map lazily, and get most of that 200 KB back
-- Line-level alerts — "any 758 here" — instead of alerts tied to one bus
-- Sample arrival estimates through the day, so the ranking can say whether a
-  prediction was any good and not just whether the bus was on time
-- End-to-end tests
 
 ---
 

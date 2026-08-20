@@ -1,3 +1,8 @@
+import { setWorkerUrl } from 'maplibre-gl';
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+
+setWorkerUrl(workerUrl);
+
 const DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 const LIGHT = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 

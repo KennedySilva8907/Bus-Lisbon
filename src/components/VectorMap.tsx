@@ -61,11 +61,9 @@ import {
   PANEL_SETTLE_MS,
   coveredHeight,
   frameAround,
-  frameMovedEnough,
   frameOffset,
   framePadding,
 } from '../services/framing';
-import type { Framing } from '../services/framing';
 import {
   LOCATED_ONCE_KEY,
   LOCATION_DOT_LAYER,
@@ -353,7 +351,6 @@ export default function VectorMap({
   const latest = useRef({ vehicle, selectedStop, route });
   const sliding = useRef(0);
   const fix = useRef<Fix | null>(null);
-  const framed = useRef<Framing | null>(null);
 
   useEffect(() => {
     latest.current = { vehicle, selectedStop, route };
@@ -507,9 +504,7 @@ export default function VectorMap({
 
     const frame = frameAround(stop ? [stop, bus] : [bus]);
 
-    if (!frame || !frameMovedEnough(framed.current, frame)) return;
-
-    framed.current = frame;
+    if (!frame) return;
 
     const panel = document.getElementById(PANEL_ELEMENT_ID)?.getBoundingClientRect() ?? null;
     const padding = framePadding(box.width, box.height, coveredHeight(box, panel));

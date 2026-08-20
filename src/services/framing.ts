@@ -30,7 +30,6 @@ export const FRAME_MIN_VIEW = 140;
 export const PANEL_SETTLE_MS = 340;
 export const FRAME_MAX_ZOOM = 17;
 export const FRAME_STOP_ZOOM = 16;
-export const FRAME_REDRAW = 0.08;
 export const PANEL_ELEMENT_ID = 'stop-details-panel';
 
 export function frameAround(points: Corner[]): Framing | null {
@@ -70,21 +69,4 @@ export function framePadding(width: number, height: number, covered: number): In
 
 export function frameOffset(insets: Insets): [number, number] {
   return [(insets.left - insets.right) / 2, (insets.top - insets.bottom) / 2];
-}
-
-export function frameMovedEnough(previous: Framing | null, next: Framing): boolean {
-  if (!previous) return true;
-
-  const span = Math.max(
-    next.northEast.lon - next.southWest.lon,
-    next.northEast.lat - next.southWest.lat
-  );
-  const shift = Math.max(
-    Math.abs(next.southWest.lon - previous.southWest.lon),
-    Math.abs(next.southWest.lat - previous.southWest.lat),
-    Math.abs(next.northEast.lon - previous.northEast.lon),
-    Math.abs(next.northEast.lat - previous.northEast.lat)
-  );
-
-  return shift > span * FRAME_REDRAW;
 }

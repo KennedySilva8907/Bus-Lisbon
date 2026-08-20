@@ -6,7 +6,6 @@ import {
   FRAME_TOP,
   coveredHeight,
   frameAround,
-  frameMovedEnough,
   frameOffset,
   framePadding,
 } from './framing';
@@ -97,31 +96,5 @@ describe('frameOffset', () => {
 
   it('leaves the target in the middle when nothing covers the map', () => {
     expect(frameOffset({ top: 0, bottom: 0, left: 0, right: 0 })).toEqual([0, 0]);
-  });
-});
-
-describe('frameMovedEnough', () => {
-  const frame = { southWest: { lon: -9.2, lat: 38.7 }, northEast: { lon: -9.1, lat: 38.8 } };
-
-  it('always draws the first frame', () => {
-    expect(frameMovedEnough(null, frame)).toBe(true);
-  });
-
-  it('ignores a bus that crept a few metres', () => {
-    const crept = { southWest: { lon: -9.2001, lat: 38.7 }, northEast: { lon: -9.1, lat: 38.8 } };
-
-    expect(frameMovedEnough(frame, crept)).toBe(false);
-  });
-
-  it('follows a bus that covered real ground', () => {
-    const moved = { southWest: { lon: -9.2, lat: 38.7 }, northEast: { lon: -9.1, lat: 38.83 } };
-
-    expect(frameMovedEnough(frame, moved)).toBe(true);
-  });
-
-  it('reframes completely when another bus is picked across town', () => {
-    const outro = { southWest: { lon: -9.4, lat: 38.6 }, northEast: { lon: -9.3, lat: 38.7 } };
-
-    expect(frameMovedEnough(frame, outro)).toBe(true);
   });
 });

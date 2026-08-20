@@ -1,9 +1,3 @@
-export const MAP_ENGINE = (import.meta.env.VITE_MAP_ENGINE as string | undefined) ?? 'leaflet';
-
-export function usesVectorMap(): boolean {
-  return MAP_ENGINE === 'maplibre';
-}
-
 const DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 const LIGHT = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 

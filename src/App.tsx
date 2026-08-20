@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import TrackingMap from './components/TrackingMap';
 import VectorMap from './components/VectorMap';
 import StopDetailsPanel from './components/StopDetailsPanel';
 import SearchBar from './components/SearchBar';
@@ -7,7 +6,6 @@ import SplashScreen from './components/SplashScreen';
 import { usePattern, useSingleVehicle, useStops } from './services/api';
 import type { Stop } from './services/api';
 import { useFavorites } from './hooks/useFavorites';
-import { usesVectorMap } from './services/basemap';
 
 function App() {
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
@@ -24,12 +22,8 @@ function App() {
     }
   });
   const { favorites, toggle: toggleFavorite, isFavorite } = useFavorites();
-  const route = usePattern(usesVectorMap() ? selectedPatternId : null);
-  const { vehicle } = useSingleVehicle(
-    usesVectorMap() ? selectedVehicleId : null,
-    usesVectorMap() ? selectedLineId : null,
-    usesVectorMap() ? selectedPatternId : null
-  );
+  const route = usePattern(selectedPatternId);
+  const { vehicle } = useSingleVehicle(selectedVehicleId, selectedLineId, selectedPatternId);
 
   // Notification-click target: a stop the user came in to see. Resolved once
   // stops finish loading (we get just the id from the URL or SW message).
@@ -146,32 +140,18 @@ function App() {
 
       {/* Main Map Area */}
       <main className="flex-1 w-full h-full z-0">
-        {usesVectorMap() ? (
-          <VectorMap
-            stops={stops}
-            selectedStop={selectedStop}
-            route={route}
-            vehicle={vehicle}
-            panelOpen={!!selectedStop}
-            panelExpanded={isPanelExpanded}
-            isDarkMap={isDarkMap}
-            loadingStops={stopsLoading}
-            onStopSelect={handleStopSelect}
-            onToggleMapTheme={toggleMapTheme}
-          />
-        ) : (
-        <TrackingMap
-          onStopSelect={handleStopSelect}
-          selectedVehicleId={selectedVehicleId}
-          selectedPatternId={selectedPatternId}
-          selectedLineId={selectedLineId}
+        <VectorMap
+          stops={stops}
           selectedStop={selectedStop}
+          route={route}
+          vehicle={vehicle}
+          panelOpen={!!selectedStop}
+          panelExpanded={isPanelExpanded}
           isDarkMap={isDarkMap}
+          loadingStops={stopsLoading}
+          onStopSelect={handleStopSelect}
           onToggleMapTheme={toggleMapTheme}
-          isPanelOpen={!!selectedStop}
-          isPanelExpanded={isPanelExpanded}
         />
-        )}
       </main>
 
       {/* Side/bottom panel — only mounted once a stop is selected. On desktop

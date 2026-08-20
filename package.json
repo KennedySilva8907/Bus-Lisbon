@@ -24,7 +24,7 @@
     "react",
     "typescript",
     "vite",
-    "leaflet",
+    "maplibre",
     "web-push",
     "vercel",
     "upstash"
@@ -39,17 +39,12 @@
   },
   "dependencies": {
     "@microsoft/signalr": "^10.0.11",
-    "@types/leaflet": "^1.9.21",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "leaflet": "^1.9.4",
-    "leaflet-polylinedecorator": "^1.6.0",
     "lucide-react": "^0.577.0",
     "maplibre-gl": "^6.4.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-leaflet": "^5.0.0",
-    "react-leaflet-cluster": "^4.0.0",
     "swr": "^2.4.1",
     "tailwind-merge": "^3.5.0"
   },

@@ -5,14 +5,25 @@ import { Star } from 'lucide-react';
 interface SearchBarProps {
   onStopSelect: (stop: Stop) => void;
   favorites?: string[];
+  tuckAway?: boolean;
 }
 
-export default function SearchBar({ onStopSelect, favorites = [] }: SearchBarProps) {
+export default function SearchBar({ onStopSelect, favorites = [], tuckAway = false }: SearchBarProps) {
   const { stops } = useStops();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [reopened, setReopened] = useState(false);
+  const [wasTucked, setWasTucked] = useState(tuckAway);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  if (tuckAway !== wasTucked) {
+    setWasTucked(tuckAway);
+    if (tuckAway) setReopened(false);
+  }
+
+  const tucked = tuckAway && !reopened;
 
   // Debounce the query so we don't filter 12K stops on every keystroke
   useEffect(() => {
@@ -45,23 +56,49 @@ export default function SearchBar({ onStopSelect, favorites = [] }: SearchBarPro
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
+        setReopened(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const showFavorites = isOpen && debouncedQuery.length < 2 && favoriteStops.length > 0;
-  const showResults = isOpen && filteredStops.length > 0;
-  const showEmpty = isOpen && debouncedQuery.length >= 2 && filteredStops.length === 0;
+  const showFavorites = isOpen && !tucked && debouncedQuery.length < 2 && favoriteStops.length > 0;
+  const showResults = isOpen && !tucked && filteredStops.length > 0;
+  const showEmpty = isOpen && !tucked && debouncedQuery.length >= 2 && filteredStops.length === 0;
+
+  const reopen = () => {
+    setReopened(true);
+    setIsOpen(true);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const pick = (stop: Stop) => {
+    onStopSelect(stop);
+    setIsOpen(false);
+    setReopened(false);
+    setQuery('');
+    setDebouncedQuery('');
+  };
 
   return (
-    <div className="absolute top-[max(1rem,env(safe-area-inset-top))] left-4 right-4 z-[2000] md:w-96 md:left-4" ref={containerRef}>
-      <div className="bg-carris-gray/90 backdrop-blur-md rounded-xl p-4 shadow-2xl border border-white/5 border-t-white/10 flex items-center justify-between text-white transition-all hover:bg-carris-gray focus-within:ring-2 focus-within:ring-carris-yellow relative">
+    <div className="absolute top-[max(1rem,env(safe-area-inset-top))] left-4 right-4 z-[2000] md:w-96 md:left-4 pointer-events-none" ref={containerRef}>
+      <div
+        onClick={tucked ? reopen : undefined}
+        className={`bg-carris-gray/90 backdrop-blur-md shadow-2xl border border-white/5 border-t-white/10 flex items-center text-white pointer-events-auto overflow-hidden hover:bg-carris-gray focus-within:ring-2 focus-within:ring-carris-yellow relative transition-[width,height,border-radius,padding] duration-300 ease-out ${
+          tucked
+            ? 'w-12 h-12 rounded-full p-0 justify-center cursor-pointer active:scale-95'
+            : 'w-full rounded-xl p-4 justify-between'
+        }`}
+      >
         <input
+          ref={inputRef}
           type="text"
           placeholder="Pesquisar paragens, IDs ou locais..."
-          className="bg-transparent border-none outline-none text-white placeholder-gray-400 w-full"
+          tabIndex={tucked ? -1 : 0}
+          className={`bg-transparent border-none outline-none text-white placeholder-gray-400 transition-[width,opacity] duration-300 ease-out ${
+            tucked ? 'w-0 opacity-0 pointer-events-none' : 'w-full opacity-100'
+          }`}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -69,14 +106,14 @@ export default function SearchBar({ onStopSelect, favorites = [] }: SearchBarPro
           }}
           onFocus={() => setIsOpen(true)}
         />
-        {(query.length > 0 && isOpen) ? (
+        {(query.length > 0 && isOpen && !tucked) ? (
           <button onClick={() => { setQuery(''); setDebouncedQuery(''); setIsOpen(false); }} className="p-1 hover:bg-white/10 rounded-full mx-1 cursor-pointer">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-carris-yellow flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className={`text-carris-yellow flex-shrink-0 transition-all duration-300 ${tucked ? 'h-6 w-6' : 'h-5 w-5'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         )}
@@ -84,7 +121,7 @@ export default function SearchBar({ onStopSelect, favorites = [] }: SearchBarPro
 
       {/* Favorites dropdown (when search is empty) */}
       {showFavorites && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-carris-gray/95 backdrop-blur-md rounded-xl shadow-2xl border border-white/10 overflow-hidden transform origin-top transition-all">
+        <div className="absolute top-full left-0 right-0 mt-2 pointer-events-auto bg-carris-gray/95 backdrop-blur-md rounded-xl shadow-2xl border border-white/10 overflow-hidden transform origin-top transition-all">
           <div className="px-3 pt-3 pb-1">
             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
               <Star size={10} className="text-carris-yellow" />
@@ -95,12 +132,7 @@ export default function SearchBar({ onStopSelect, favorites = [] }: SearchBarPro
             {favoriteStops.map(stop => (
               <li
                 key={stop.id}
-                onClick={() => {
-                  onStopSelect(stop);
-                  setIsOpen(false);
-                  setQuery('');
-                  setDebouncedQuery('');
-                }}
+                onClick={() => pick(stop)}
                 className="p-3 border-b border-white/5 hover:bg-white/5 cursor-pointer flex justify-between items-center transition-colors last:border-0"
               >
                 <div className="flex flex-col">
@@ -121,17 +153,12 @@ export default function SearchBar({ onStopSelect, favorites = [] }: SearchBarPro
 
       {/* Search results dropdown */}
       {showResults && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-carris-gray/95 backdrop-blur-md rounded-xl shadow-2xl border border-white/10 overflow-hidden transform origin-top transition-all">
+        <div className="absolute top-full left-0 right-0 mt-2 pointer-events-auto bg-carris-gray/95 backdrop-blur-md rounded-xl shadow-2xl border border-white/10 overflow-hidden transform origin-top transition-all">
           <ul className="max-h-64 overflow-y-auto custom-scrollbar">
             {filteredStops.map(stop => (
               <li
                 key={stop.id}
-                onClick={() => {
-                  onStopSelect(stop);
-                  setIsOpen(false);
-                  setQuery('');
-                  setDebouncedQuery('');
-                }}
+                onClick={() => pick(stop)}
                 className="p-3 border-b border-white/5 hover:bg-white/5 cursor-pointer flex justify-between items-center transition-colors last:border-0"
               >
                 <div className="flex flex-col">
@@ -149,7 +176,7 @@ export default function SearchBar({ onStopSelect, favorites = [] }: SearchBarPro
 
       {/* No results */}
       {showEmpty && (
-         <div className="absolute top-full left-0 right-0 mt-2 p-4 text-center text-gray-400 bg-carris-gray/95 backdrop-blur-md rounded-xl shadow-2xl border border-white/10">
+         <div className="absolute top-full left-0 right-0 mt-2 pointer-events-auto p-4 text-center text-gray-400 bg-carris-gray/95 backdrop-blur-md rounded-xl shadow-2xl border border-white/10">
            Nenhuma paragem encontrada.
          </div>
       )}

@@ -1,96 +1,98 @@
-# Setup: Push Notifications
+# Setting up push notifications
 
-Esta funcionalidade requer alguns passos de provisionamento que tens de fazer no Vercel **uma única vez**. Sem isto, os alertas frontend mostram um erro "VAPID public key não configurada" ao tentar agendar.
+Alerts need three things: a VAPID key pair, an Upstash database, and the job
+that checks alerts running on a schedule. Without them the app still works, but
+tapping a bell shows an error instead of scheduling anything.
 
-## 1. Gerar VAPID keys
+## 1. VAPID keys
 
-VAPID = Voluntary Application Server Identification. São o par de chaves que prova que tu és o servidor autorizado a enviar pushes para os teus utilizadores.
-
-No teu terminal:
+VAPID is what proves to the push service that the notification came from your
+server and not from someone else.
 
 ```bash
 npx web-push generate-vapid-keys
 ```
 
-Vais ver algo como:
+Keep both keys. The public one is not a secret — the browser has to see it. The
+private one is.
 
-```
-Public Key:  BHd_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-Private Key: yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
-```
+## 2. Upstash
 
-Guarda os dois.
+The alerts live in a key-value store, and so does the line ranking the nightly
+job publishes. Create a free Upstash Redis database and keep its REST URL and
+REST token. The free plan is 10k commands a day, which is far more than this
+uses.
 
-## 2. Provisionar Redis (Upstash — free tier)
+Pick a region close to the API. The API runs in Spain Central.
 
-> ⚠️ **NÃO escolhas "Redis" da lista** (essa é a Redis Cloud oficial, $10/mês mínimo).
-> **Escolhe "Upstash"** que tem free tier (10k comandos/dia, mais que suficiente).
+## 3. Configuration
 
-1. Vai a https://vercel.com/dashboard
-2. Abre o teu projeto **Bus-Lisbon**
-3. Tab **Storage** → **Marketplace Database Providers** → **Upstash**
-4. Configuração:
-   - **Plan:** Free
-   - **Region:** Frankfurt (ou London)
-   - **Type:** Redis
-5. **Install** → liga ao projeto Bus-Lisbon
-6. ✅ As env vars `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN` são injetadas automaticamente.
-
-## 3. Adicionar variáveis de ambiente
-
-No Vercel: **Settings** → **Environment Variables**. Adiciona:
-
-| Nome | Valor | Ambientes |
-|---|---|---|
-| `VAPID_PUBLIC_KEY` | (a public key do passo 1) | Production, Preview, Development |
-| `VAPID_PRIVATE_KEY` | (a private key do passo 1) | Production, Preview, Development |
-| `VAPID_SUBJECT` | `mailto:o-teu-email@exemplo.com` | Production, Preview, Development |
-| `VITE_VAPID_PUBLIC_KEY` | (a **mesma** public key — Vite expõe ao browser) | Production, Preview, Development |
-| `CRON_SECRET` | (uma string aleatória qualquer, ex: `openssl rand -hex 32`) | Production |
-
-> ⚠️ `VITE_VAPID_PUBLIC_KEY` tem de ter o prefixo `VITE_` para o Vite expor ao código de browser. É a mesma chave que `VAPID_PUBLIC_KEY`, duplicada propositadamente.
-
-## 4. Local development
-
-Cria `.env.local` na raiz do projeto (já está no `.gitignore`):
+The backend reads these. In development use user secrets, never a file in the
+repository:
 
 ```bash
-VITE_VAPID_PUBLIC_KEY=<a tua public key>
-VAPID_PUBLIC_KEY=<a mesma public key>
-VAPID_PRIVATE_KEY=<a tua private key>
-VAPID_SUBJECT=mailto:o-teu-email@exemplo.com
-CRON_SECRET=<a tua string aleatória>
-
-# Para o KV local, podes:
-# (a) usar `vercel env pull .env.local` que puxa do dashboard, OU
-# (b) usar `vercel dev` que injeta automaticamente
+cd backend/src/BusLisbon.Api
+dotnet user-secrets set "Vapid:PublicKey"    "<public key>"
+dotnet user-secrets set "Vapid:PrivateKey"   "<private key>"
+dotnet user-secrets set "Vapid:Subject"      "mailto:you@example.com"
+dotnet user-secrets set "Upstash:RestUrl"    "<rest url>"
+dotnet user-secrets set "Upstash:RestToken"  "<rest token>"
 ```
 
-Recomendado: `vercel dev` em vez de `npm run dev` quando quiseres testar as functions e o cron.
+The alert job needs the same five. The collection job needs the Upstash pair
+and a connection string, `ConnectionStrings__Observations`, pointing at the SQL
+database.
 
-## 5. Verificar que está tudo a funcionar
+In production these are environment variables on the container app and on both
+container app jobs. The database connection uses a managed identity, so the
+connection string carries `Authentication=Active Directory Default` and no
+password.
 
-1. **Frontend:** abre a app, abre uma paragem, clica no sino numa chegada futura. Deve abrir o modal "Agendar notificação".
-2. **Backend:** chama manualmente o cron para confirmar:
-   ```bash
-   curl -H "Authorization: Bearer $CRON_SECRET" https://o-teu-projeto.vercel.app/api/cron-check-alerts
-   ```
-   Deve devolver `{"processed":0,...}` ou similar.
-3. **Cron:** após deploy, vai a **Cron Jobs** no dashboard do Vercel e confirma que `/api/cron-check-alerts` está listado e a correr a cada minuto.
+The frontend needs the public key only, as `VITE_VAPID_PUBLIC_KEY` in the
+Vercel project. The `VITE_` prefix is what makes Vite expose it to browser
+code. It is the same value as `Vapid:PublicKey`, duplicated on purpose.
 
-## Limitações conhecidas
+## 4. The schedule
 
-- **Vercel Hobby tier:** o cron schedule pode estar limitado a 1× por dia. Se for o caso, ou:
-  - Atualizar para Pro (~$20/mês), OU
-  - Apontar um cron externo grátis (https://cron-job.org) ao URL `/api/cron-check-alerts` com o header `Authorization: Bearer <CRON_SECRET>` a cada minuto
-- **iOS:** as notificações só funcionam se o utilizador instalar a app via "Adicionar à Tela Inicial". Já está tratado no UI (mostra instrução).
-- **Sem VAPID configurado:** o utilizador vê erro "VAPID public key não configurada" ao tentar agendar. Não bloqueia o resto da app.
+The check runs as an Azure Container Apps Job on a cron trigger, once a minute:
+`cj-buslisbon-alerts`. It wakes, loads the pending alerts, asks Carris where
+those buses are, sends whatever is due, writes back and exits.
 
-## Custos esperados
+Changing how often it runs means changing two things together — the cron
+expression on the job and `Alerts:CheckInterval` — or the job will either miss
+alerts or send them twice.
 
-| Recurso | Tier free | Limite mensal | Custo típico |
-|---|---|---|---|
-| Vercel Functions | Sim | 100 GB-h | $0 |
-| Vercel KV | Sim | 30k commands/mês | $0 |
-| Vercel Cron | Sim (Hobby pode estar limitado) | — | $0 ou $20 (Pro) |
-| FCM / APNS push | Sempre grátis | Sem limites práticos | $0 |
+There is a second job, `cj-buslisbon-collection`, which runs nightly and has
+nothing to do with alerts.
+
+## 5. Checking it works
+
+Open a stop, tap the bell on a future arrival. If the modal opens, the public
+key reached the browser.
+
+For the rest, `GET /api/alerts/pending` lists what is scheduled. It is behind a
+secret, `Diagnostics:Secret`, so it is not something anyone can read.
+
+## Known limits
+
+**iOS only delivers push to installed apps.** The notification never arrives
+unless the app was added to the home screen first. The UI says so rather than
+failing quietly.
+
+**The job runs once a minute,** so it catches the bus somewhere inside a sixty
+second window. The notification repeats the threshold you chose, so the number
+you read matches the number you picked.
+
+**A minute is not free.** At that cadence the job runs past the free grant for
+container app jobs, because each run spends about twenty-seven seconds starting
+a container to do a hundred and thirty-five milliseconds of work. Running it
+every five minutes stays inside the grant and makes alerts noticeably worse.
+That is the trade, and it is a deliberate choice rather than an oversight.
+
+## What it costs
+
+| Thing | Cost |
+|---|---|
+| Upstash Redis | free plan, 10k commands a day |
+| Container Apps Jobs | free grant, exceeded at one minute — see above |
+| Web push (FCM, APNS) | free, no practical limit |

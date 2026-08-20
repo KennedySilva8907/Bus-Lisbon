@@ -28,6 +28,8 @@ export const FRAME_SIDE = 40;
 export const FRAME_GAP = 56;
 export const FRAME_MIN_VIEW = 140;
 export const PANEL_SETTLE_MS = 340;
+export const FRAME_MAX_ZOOM = 17;
+export const FRAME_STOP_ZOOM = 16;
 export const PANEL_ELEMENT_ID = 'stop-details-panel';
 
 export function frameAround(points: Corner[]): Framing | null {
@@ -63,4 +65,8 @@ export function framePadding(width: number, height: number, covered: number): In
   const side = Math.min(FRAME_SIDE, Math.max(0, Math.floor((width - FRAME_MIN_VIEW) / 2)));
 
   return { top, bottom, left: side, right: side };
+}
+
+export function frameOffset(insets: Insets): [number, number] {
+  return [(insets.left - insets.right) / 2, (insets.top - insets.bottom) / 2];
 }

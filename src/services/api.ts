@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import useSWR from 'swr';
 import { GATEWAY_BASE, backendIsAwake, isGatewayEnabled, toVehicle, gatewayVehicleUrl, type GatewayVehicleResponse } from './gateway';
 import { freshestVehicle, useVehicleStream } from './realtime';
@@ -51,6 +52,9 @@ export interface ETA {
 
 // ── Stops (cached 1h, fetched once) ────────────────────
 
+const NO_STOPS: Stop[] = [];
+const NO_SHAPE: number[][] = [];
+
 export function useStops() {
   const { data, error, isLoading } = useSWR<Stop[]>(`${API_BASE_URL}/stops`, fetcher, {
     revalidateOnFocus: false,
@@ -61,7 +65,7 @@ export function useStops() {
   });
   
   return {
-    stops: data || [],
+    stops: data || NO_STOPS,
     isLoading,
     isError: error
   };
@@ -221,12 +225,12 @@ export function usePattern(patternId?: string | null) {
     { revalidateOnFocus: false, revalidateIfStale: false, dedupingInterval: 86400000 }
   );
 
-  return {
-    shape: (shapeData?.geojson?.geometry?.coordinates || []) as number[][],
+  return useMemo(() => ({
+    shape: (shapeData?.geojson?.geometry?.coordinates || NO_SHAPE) as number[][],
     colour: (data?.color as string | undefined) || '#E53935',
     textColour: (data?.text_color as string | undefined) || '#FFFFFF',
     stops: ((data?.path || []) as PatternStop[]).map(entry => entry.stop).filter(Boolean),
-  };
+  }), [data, shapeData]);
 }
 
 export function usePatternShape(patternId?: string | null) {

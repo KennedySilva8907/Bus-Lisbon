@@ -33,3 +33,26 @@ export function toLocationCollection(fix: Fix | null) {
       : [],
   };
 }
+
+export type LocationPermission = 'granted' | 'prompt' | 'denied' | 'unknown';
+
+export async function readPermission(): Promise<LocationPermission> {
+  if (!navigator.permissions?.query) return 'unknown';
+
+  try {
+    const status = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+
+    return status.state as LocationPermission;
+  } catch {
+    return 'unknown';
+  }
+}
+
+export const REFUSED_NOTICE =
+  'A localização está bloqueada. Vai às Definições do telemóvel, procura o Bus Lisbon e liga a Localização.';
+
+export function noticeFor(error: GeolocationPositionError | null): string {
+  if (error?.code === 1) return REFUSED_NOTICE;
+
+  return 'Não consegui apanhar a tua localização. Tenta outra vez daqui a pouco.';
+}

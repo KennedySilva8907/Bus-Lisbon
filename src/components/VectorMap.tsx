@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AttributionControl, Map as MapLibreMap, type GeoJSONSource, type MapGeoJSONFeature } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { LISBON, basemapStyle } from '../services/basemap';
@@ -72,7 +72,10 @@ import {
   LOCATION_HALO_RADIUS,
   LOCATION_SOURCE,
   LOCATION_ZOOM,
+  REFUSED_NOTICE,
+  noticeFor,
   readFix,
+  readPermission,
   toLocationCollection,
   type Fix,
 } from '../services/userLocation';
@@ -351,6 +354,8 @@ export default function VectorMap({
   const latest = useRef({ vehicle, selectedStop, route });
   const sliding = useRef(0);
   const fix = useRef<Fix | null>(null);
+  const watching = useRef(0);
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     latest.current = { vehicle, selectedStop, route };
@@ -436,19 +441,68 @@ export default function VectorMap({
     });
   }, []);
 
-  const locateMe = useCallback(() => {
+  const drawFix = useCallback((found: Fix) => {
+    fix.current = found;
+
+    const source = map.current?.getSource(LOCATION_SOURCE) as GeoJSONSource | undefined;
+
+    source?.setData(toLocationCollection(found) as never);
+  }, []);
+
+  const startWatching = useCallback(() => {
+    if (watching.current) return;
+
+    watching.current = navigator.geolocation.watchPosition(
+      position => {
+        const found = readFix(position);
+
+        if (!found) return;
+
+        drawFix(found);
+
+        if (sessionStorage.getItem(LOCATED_ONCE_KEY)) return;
+
+        sessionStorage.setItem(LOCATED_ONCE_KEY, '1');
+
+        if (!latest.current.selectedStop && !latest.current.vehicle) {
+          easeToPoint(found, LOCATION_ZOOM);
+        }
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 }
+    );
+  }, [drawFix, easeToPoint]);
+
+  const locateMe = useCallback(async () => {
+    setNotice('');
+
     if (fix.current) {
       easeToPoint(fix.current, LOCATION_ZOOM);
+      startWatching();
 
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(position => {
-      const found = readFix(position);
+    if (await readPermission() === 'denied') {
+      setNotice(REFUSED_NOTICE);
 
-      if (found) easeToPoint(found, LOCATION_ZOOM);
-    }, () => {}, { enableHighAccuracy: true, timeout: 5000 });
-  }, [easeToPoint]);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const found = readFix(position);
+
+        if (!found) return;
+
+        drawFix(found);
+        easeToPoint(found, LOCATION_ZOOM);
+        startWatching();
+      },
+      error => setNotice(noticeFor(error)),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }, [drawFix, easeToPoint, startWatching]);
 
   const backToStop = useCallback(() => {
     const chosen = latest.current.selectedStop;
@@ -461,29 +515,28 @@ export default function VectorMap({
   }, [easeToPoint]);
 
   useEffect(() => {
-    const watch = navigator.geolocation.watchPosition(
-      position => {
-        const found = readFix(position);
+    let dropped = false;
 
-        if (!found) return;
+    readPermission().then(state => {
+      if (!dropped && state === 'granted') startWatching();
+    });
 
-        fix.current = found;
+    return () => {
+      dropped = true;
 
-        const source = map.current?.getSource(LOCATION_SOURCE) as GeoJSONSource | undefined;
+      if (watching.current) navigator.geolocation.clearWatch(watching.current);
 
-        source?.setData(toLocationCollection(found) as never);
+      watching.current = 0;
+    };
+  }, [startWatching]);
 
-        if (!sessionStorage.getItem(LOCATED_ONCE_KEY)) {
-          sessionStorage.setItem(LOCATED_ONCE_KEY, '1');
-          easeToPoint(found, LOCATION_ZOOM);
-        }
-      },
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
-    );
+  useEffect(() => {
+    if (!notice) return;
 
-    return () => navigator.geolocation.clearWatch(watch);
-  }, [easeToPoint]);
+    const timer = setTimeout(() => setNotice(''), 8000);
+
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const fitToVehicle = useCallback(() => {
     const instance = map.current;
@@ -651,6 +704,8 @@ export default function VectorMap({
       <div ref={container} className="w-full h-full" />
 
       <MapControls
+        notice={notice}
+        onDismissNotice={() => setNotice('')}
         panelOpen={panelOpen}
         panelExpanded={panelExpanded}
         isDarkMap={isDarkMap}

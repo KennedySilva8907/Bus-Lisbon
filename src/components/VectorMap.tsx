@@ -61,6 +61,19 @@ import {
   frameAround,
   framePadding,
 } from '../services/framing';
+import {
+  LOCATED_ONCE_KEY,
+  LOCATION_DOT_LAYER,
+  LOCATION_DOT_RADIUS,
+  LOCATION_HALO_LAYER,
+  LOCATION_HALO_RADIUS,
+  LOCATION_SOURCE,
+  LOCATION_ZOOM,
+  readFix,
+  toLocationCollection,
+  type Fix,
+} from '../services/userLocation';
+import MapControls from './MapControls';
 import type { Stop, Vehicle } from '../services/api';
 
 export interface SelectedRoute {
@@ -78,11 +91,20 @@ interface VectorMapProps {
   panelOpen: boolean;
   panelExpanded: boolean;
   isDarkMap: boolean;
+  loadingStops: boolean;
   onStopSelect: (stop: Stop) => void;
+  onToggleMapTheme: () => void;
 }
 
 function firstLabelLayer(map: MapLibreMap): string | undefined {
-  return map.getStyle().layers.find(layer => layer.type === 'symbol')?.id;
+  const layers = map.getStyle().layers;
+  let lastGround = -1;
+
+  layers.forEach((layer, index) => {
+    if (layer.type === 'line' || layer.type === 'fill' || layer.type === 'fill-extrusion') lastGround = index;
+  });
+
+  return layers.find((layer, index) => index > lastGround && layer.type === 'symbol')?.id;
 }
 
 function loadImageFile(
@@ -105,6 +127,33 @@ function loadImageFile(
 }
 
 const VEHICLE_LAYERS = [VEHICLE_GLOW_LAYER, VEHICLE_LAYER];
+
+function paintUserLocation(map: MapLibreMap) {
+  if (map.getLayer(LOCATION_HALO_LAYER)) return;
+
+  map.addLayer({
+    id: LOCATION_HALO_LAYER,
+    type: 'circle',
+    source: LOCATION_SOURCE,
+    paint: {
+      'circle-radius': LOCATION_HALO_RADIUS,
+      'circle-color': '#3b82f6',
+      'circle-opacity': 0.22,
+    },
+  });
+
+  map.addLayer({
+    id: LOCATION_DOT_LAYER,
+    type: 'circle',
+    source: LOCATION_SOURCE,
+    paint: {
+      'circle-radius': LOCATION_DOT_RADIUS,
+      'circle-color': '#3b82f6',
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#ffffff',
+    },
+  });
+}
 
 function paintVehicle(map: MapLibreMap) {
   if (map.getLayer(VEHICLE_LAYER)) return;
@@ -134,6 +183,17 @@ function paintVehicle(map: MapLibreMap) {
       'icon-ignore-placement': true,
     },
   });
+}
+
+function mutePassingStops(map: MapLibreMap, following: boolean) {
+  if (!map.getLayer(STOPS_LAYER)) return;
+
+  map.setPaintProperty(STOPS_LAYER, 'circle-radius', (following ? mutedStopRadius : stopRadius) as never);
+  map.setPaintProperty(
+    STOPS_LAYER,
+    'circle-stroke-width',
+    (following ? mutedStopStrokeWidth : stopStrokeWidth) as never
+  );
 }
 
 function lightenRoadNames(map: MapLibreMap, over: boolean) {
@@ -252,7 +312,9 @@ export default function VectorMap({
   panelOpen,
   panelExpanded,
   isDarkMap,
+  loadingStops,
   onStopSelect,
+  onToggleMapTheme,
 }: VectorMapProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
@@ -261,10 +323,11 @@ export default function VectorMap({
   const waypoints = useRef(toWaypointCollection(route.stops));
   const known = useRef(stops);
   const select = useRef(onStopSelect);
-  const startedDark = useRef(isDarkMap);
+  const dark = useRef(isDarkMap);
   const drawnAt = useRef<Placed | null>(placeVehicle(vehicle));
   const latest = useRef({ vehicle, selectedStop });
   const sliding = useRef(0);
+  const fix = useRef<Fix | null>(null);
 
   useEffect(() => {
     latest.current = { vehicle, selectedStop };
@@ -306,15 +369,7 @@ export default function VectorMap({
     }
 
     lightenRoadNames(instance, following);
-
-    if (instance.getLayer(STOPS_LAYER)) {
-      instance.setPaintProperty(STOPS_LAYER, 'circle-radius', (following ? mutedStopRadius : stopRadius) as never);
-      instance.setPaintProperty(
-        STOPS_LAYER,
-        'circle-stroke-width',
-        (following ? mutedStopStrokeWidth : stopStrokeWidth) as never
-      );
-    }
+    mutePassingStops(instance, following);
   }, [route]);
 
   useEffect(() => {
@@ -348,6 +403,71 @@ export default function VectorMap({
 
     return () => cancelAnimationFrame(sliding.current);
   }, [vehicle]);
+
+  const easeToPoint = useCallback((point: Fix, zoom: number) => {
+    const instance = map.current;
+    const box = container.current?.getBoundingClientRect();
+
+    if (!instance || !box) return;
+
+    const panel = document.getElementById(PANEL_ELEMENT_ID)?.getBoundingClientRect() ?? null;
+
+    instance.easeTo({
+      center: [point.lon, point.lat],
+      zoom,
+      padding: framePadding(box.width, box.height, coveredHeight(box, panel)),
+      duration: 900,
+    });
+  }, []);
+
+  const locateMe = useCallback(() => {
+    if (fix.current) {
+      easeToPoint(fix.current, LOCATION_ZOOM);
+
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(position => {
+      const found = readFix(position);
+
+      if (found) easeToPoint(found, LOCATION_ZOOM);
+    }, () => {}, { enableHighAccuracy: true, timeout: 5000 });
+  }, [easeToPoint]);
+
+  const backToStop = useCallback(() => {
+    const chosen = latest.current.selectedStop;
+    const lon = Number(chosen?.lon);
+    const lat = Number(chosen?.lat);
+
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+
+    easeToPoint({ lon, lat }, 16);
+  }, [easeToPoint]);
+
+  useEffect(() => {
+    const watch = navigator.geolocation.watchPosition(
+      position => {
+        const found = readFix(position);
+
+        if (!found) return;
+
+        fix.current = found;
+
+        const source = map.current?.getSource(LOCATION_SOURCE) as GeoJSONSource | undefined;
+
+        source?.setData(toLocationCollection(found) as never);
+
+        if (!sessionStorage.getItem(LOCATED_ONCE_KEY)) {
+          sessionStorage.setItem(LOCATED_ONCE_KEY, '1');
+          easeToPoint(found, LOCATION_ZOOM);
+        }
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watch);
+  }, [easeToPoint]);
 
   const fitToVehicle = useCallback(() => {
     const instance = map.current;
@@ -389,7 +509,7 @@ export default function VectorMap({
 
     const instance = new MapLibreMap({
       container: container.current,
-      style: basemapStyle(startedDark.current),
+      style: basemapStyle(dark.current),
       center: [LISBON.lon, LISBON.lat],
       zoom: LISBON.zoom,
       attributionControl: false,
@@ -413,6 +533,13 @@ export default function VectorMap({
         instance.addSource(WAYPOINTS_SOURCE, { type: 'geojson', data: waypoints.current as never });
       }
 
+      if (!instance.getSource(LOCATION_SOURCE)) {
+        instance.addSource(LOCATION_SOURCE, {
+          type: 'geojson',
+          data: toLocationCollection(fix.current) as never,
+        });
+      }
+
       if (!instance.getSource(VEHICLE_SOURCE)) {
         instance.addSource(VEHICLE_SOURCE, {
           type: 'geojson',
@@ -433,8 +560,10 @@ export default function VectorMap({
       const before = firstLabelLayer(instance);
 
       paintRoute(instance, before);
-      paintStops(instance, startedDark.current, before);
+      paintStops(instance, dark.current, before);
+      paintUserLocation(instance);
       paintVehicle(instance);
+      mutePassingStops(instance, shape.current.features.length > 0);
 
       for (const id of VEHICLE_LAYERS) {
         if (instance.getLayer(id)) instance.moveLayer(id);
@@ -473,13 +602,9 @@ export default function VectorMap({
   useEffect(() => {
     const instance = map.current;
 
-    if (!instance) return;
+    dark.current = isDarkMap;
 
-    instance.setStyle(basemapStyle(isDarkMap));
-
-    if (instance.getLayer(STOPS_LAYER)) {
-      instance.setPaintProperty(STOPS_LAYER, 'circle-stroke-color', isDarkMap ? '#0d1117' : '#1A1A1A');
-    }
+    instance?.setStyle(basemapStyle(isDarkMap));
   }, [isDarkMap]);
 
   useEffect(() => {
@@ -493,5 +618,25 @@ export default function VectorMap({
     instance.setFilter(SELECTED_DOT_LAYER, chosen);
   }, [selectedStop]);
 
-  return <div ref={container} className="w-full h-full" />;
+  return (
+    <div className={`w-full h-full relative ${isDarkMap ? 'bg-[#0d1117]' : 'bg-[#e5e3df]'}`}>
+      {loadingStops && (
+        <div className="absolute inset-0 z-[2000] flex items-center justify-center pointer-events-none bg-carris-dark/50 backdrop-blur-sm">
+          <div className="text-carris-yellow font-bold text-lg animate-pulse">A carregar paragens...</div>
+        </div>
+      )}
+
+      <div ref={container} className="w-full h-full" />
+
+      <MapControls
+        panelOpen={panelOpen}
+        panelExpanded={panelExpanded}
+        isDarkMap={isDarkMap}
+        hasStop={!!selectedStop}
+        onToggleMapTheme={onToggleMapTheme}
+        onLocate={locateMe}
+        onBackToStop={backToStop}
+      />
+    </div>
+  );
 }

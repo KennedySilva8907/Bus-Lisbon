@@ -155,7 +155,9 @@ function App() {
             panelOpen={!!selectedStop}
             panelExpanded={isPanelExpanded}
             isDarkMap={isDarkMap}
+            loadingStops={stopsLoading}
             onStopSelect={handleStopSelect}
+            onToggleMapTheme={toggleMapTheme}
           />
         ) : (
         <TrackingMap

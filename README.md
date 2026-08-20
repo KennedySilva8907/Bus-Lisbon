@@ -1,210 +1,274 @@
 # Bus Lisbon
 
-> Real-time bus tracker for **Carris Metropolitana** (Lisbon area), built as a
-> Progressive Web App. It shows live bus positions on a Leaflet map, arrival
-> times for each stop, and web-push arrival alerts. No account, no SMS, no cost.
+Real-time bus tracker for **Carris Metropolitana**, the operator that runs the
+buses around Lisbon. It is a Progressive Web App on the front, a C# API on
+Azure behind it, and it needs no account, no SMS and no money to use.
 
-**Live demo:** https://buslisbon.vercel.app
+**Live:** [buslisbon.vercel.app](https://buslisbon.vercel.app)
 
 ---
 
 ## Why I built this
 
-The official Carris Metropolitana website and app, which most people use to
-check their buses, were often down or would not load when my friends and I
-tried to use them. I noticed that even when the site was down, the public API
-was still working and returning live data. So I went ahead and started building
-my own app on top of that API, to get a reliable real-time view of the buses.
+The official Carris Metropolitana site and app were often down or would not
+load when my friends and I tried to check a bus. I noticed the public API kept
+answering even while the site was broken, so I started building my own thing on
+top of it.
 
-It started simple: just showing the live bus positions on a map. Over time I
-kept adding new features as I went, like arrival times for each stop, arrival
-alerts, offline support, and a more app-like experience on mobile.
-
----
-
-## Features
-
-**Map and live data**
-- Live Carris feed, refreshed every few seconds, with caching so it does not
-  reload data it already has
-- Dark and light map themes
-- Stop dots stay small on screen but are still easy to tap
-- The selected bus is followed on the map, with the route line drawn on top
-- Stop search across all of the roughly 12,000 Carris stops
-
-**Arrival times (ETAs)**
-- The countdown updates smoothly every few seconds instead of jumping
-- The minutes left always match the exact arrival time shown next to it
-- Shows "Agora" or "<1min" in the final minute
-- A "stale data" badge appears when the live feed has not refreshed recently
-  (iOS pauses timers while the app is in the background)
-
-**Arrival alerts (no account needed)**
-- Tap a bell on a future arrival, pick how early you want to be warned
-  (3, 5, 10, 15 minutes or a custom value), and get a push notification when
-  the bus is that close
-- No sign-up: the push subscription itself identifies the device
-- You cannot set an alert that is already too late for the current arrival
-- Tapping the notification opens the app on the right stop, with the route
-  already drawn
-
-**iOS and mobile polish**
-- Full-screen layout that handles the iPhone safe areas correctly
-- The map re-checks its size on rotation, resize, and when you come back to
-  the app, to avoid blank map tiles
-- Floating controls with a frosted look and a yellow accent
-
-**Offline and install**
-- The app caches stops and map tiles so it can still open offline
-- It can be added to the home screen and behaves like a native app
+It began as bus positions on a map. Then arrival times, then alerts, then the
+whole backend moved to C#, and then the map was rewritten. Each of those is a
+milestone in the issues with a release attached, if you want to see how it got
+here.
 
 ---
 
-## How it works (architecture)
+## What it does
 
-```
-+--------------------+         +--------------------+
-|  Browser / iOS PWA |         | Carris Metropolit. |
-|  React + Vite      | <-------|      Public API    |
-|  Tailwind + SWR    |  poll   |                    |
-|  Service Worker    |         +--------------------+
-|                    |
-|   PushManager      |
-+---------+----------+
-          |  subscribe / list / cancel
-          v
-+-----------------------------------------------------+
-| Vercel Functions (Node)                             |
-|   /api/alerts        POST / GET                     |
-|   /api/alerts/[id]   DELETE (owner-checked)         |
-|   /api/cron-check-alerts                            |
-|      called every minute by cron-job.org            |
-|      polls Carris realtime, sends web-push          |
-+---------------------+-------------------------------+
-                      |
-                      v
-              +--------------+        +--------------------+
-              | Upstash      |        | web-push           |
-              | Redis (KV)   |        | (browser push)     |
-              | free tier    |        |                    |
-              +--------------+        +--------------------+
-                                              |
-                                              v
-                                      Notification on
-                                      the user's device
+- **Follow a bus.** Pick a stop, pick an arrival, and the bus is on the map
+  turning with its heading and sliding to each new position. The map frames
+  your stop and the bus together and tightens as it gets closer.
+- **Arrival times that behave.** The countdown ticks smoothly, the minutes
+  always agree with the clock time next to them, and there is a badge when the
+  feed has gone stale — iOS freezes timers in the background and you should
+  know when what you are reading is old.
+- **Alerts without an account.** Tap the bell on an arrival, choose how early
+  you want to know, and a push notification arrives when the bus is that close.
+  The push subscription is the device identity, so there is nothing to sign up
+  for. Tapping the notification opens the app on that stop with the route drawn.
+- **Which lines you can trust.** A ranking of 272 lines by how often they arrive
+  within five minutes of the timetable, built from passages the backend collects
+  every night.
+- **Search** across the roughly 12,700 stops in the system, and favourites.
+- **Installable and offline-ish.** It goes on the home screen, keeps the stops
+  cached, and opens without a connection.
+
+---
+
+## Why there is a C# backend
+
+The first version did what most small apps do: the browser pulled the entire
+vehicle feed every eight seconds and filtered it down to the one bus you were
+watching.
+
+```text
+GET /v2/vehicles     ~163 KB gzipped, 1694 vehicles
+every 8 seconds, filtered in the browser to keep 1
+10 minutes of following a bus  ->  ~12 MB
 ```
 
-Why it is built this way:
-- **No user accounts.** The push subscription works as the device ID, so there
-  is no login and no extra personal data to store.
-- **External cron.** A free service (cron-job.org) triggers the alert check
-  every minute, because the free Vercel plan only allows a daily cron.
-- **Upstash Redis** is used for storage because its free plan is enough for
-  this project.
-- **Stateless function.** Each run of the alert check loads the pending alerts,
-  checks Carris, sends any due notifications, and updates storage in one pass.
+Twelve megabytes of mobile data to watch one bus. The backend exists to answer
+that question directly:
+
+```text
+GET /api/vehicles/{id}   ~254 bytes
+same 10 minutes          ->  ~19 KB
+```
+
+Roughly six hundred times less. That is the whole argument, and it is also why
+the API is not a CRUD app: it is a cache in front of somebody else's feed, a
+SignalR stream that pushes positions instead of being polled, and two scheduled
+jobs.
+
+One thing worth saying because it limits everything else: the newest vehicle
+timestamp in the Carris feed runs about 55 seconds behind real time, checked
+against their own `Date` header. No architecture fixes that. The ceiling is at
+the source.
 
 ---
 
-## Some tricky parts the app handles
+## How it fits together
 
-- **Carris returns every arrival of the day for a stop, including past ones.**
-  The alert check has to skip the arrivals that already happened and use the
-  next future one. Otherwise it would think the bus passed hours ago and cancel
-  the alert immediately.
-- **The alert check runs once a minute,** so it catches the bus somewhere
-  inside a 60 second window. The notification shows the threshold you picked,
-  so the number matches what you expect.
-- **iOS pauses timers** when the app is in the background, so the data can be a
-  little old. The app re-syncs when you come back and shows how old the data is.
-- **iPhone full-height CSS quirk.** The usual full-height unit left a dark strip
-  at the bottom on iPhone, so the layout combines units to cover the whole
-  screen.
-- **Tapping small dots.** Stop dots are small for a clean look but use a click
-  tolerance so they are still easy to tap, even when a route line passes over
-  them.
+```text
+        +---------------------------+
+        |  Browser / iOS PWA        |
+        |  React, Vite, MapLibre    |
+        |  service worker + push    |
+        +------+-------------+------+
+               |             |
+   stops, patterns,          |  one bus, alerts, ranking
+   shapes (direct)           |  + SignalR stream
+               |             |
+               v             v
+   +-----------------+   +--------------------------------+
+   | Carris public   |   | BusLisbon.Api                  |
+   | API             |<--| Azure Container Apps, scale-to-0|
+   +-----------------+   |   /api/vehicles/{id}           |
+               ^         |   /api/vehicles/by-line/{id}   |
+               |         |   /api/alerts                  |
+               |         |   /api/lines/reliability       |
+               |         |   /hubs/vehicles  (SignalR)    |
+               |         +----------------+---------------+
+               |                          |
+               |                  +-------+--------+
+               |                  |                |
+               |          +-------v------+  +------v-------+
+               |          | Azure SQL    |  | Upstash      |
+               |          | observed     |  | alerts +     |
+               |          | passages     |  | published    |
+               |          +-------^------+  | ranking      |
+               |                  |         +------^-------+
+               |                  |                |
+   +-----------+------------------+----------------+-------+
+   | Container Apps Jobs (cron)                            |
+   |   AlertJob       every minute: due alerts -> web-push |
+   |   CollectionJob  nightly: passages -> SQL -> ranking  |
+   +-------------------------------------------------------+
+```
+
+A few decisions worth explaining:
+
+**The container scales to zero.** Idle billing on the smallest size costs more
+per month than everything else combined, and this runs on a student credit. The
+price is a cold start of about twenty seconds, so the app is built to survive
+one: the frontend still talks to Carris directly for anything that does not
+need the backend, and shows the backend's own wake-up state instead of hanging.
+
+**The ranking is not read from SQL.** The free database pauses after an hour
+idle and the first connection back fails and takes most of a minute. The
+nightly job publishes one document to the key-value store the alerts already
+use, and the API serves that. Warm, the whole ranking answers in 0.37s.
+
+**No accounts.** The push subscription identifies the device. Nothing to log
+into, nothing personal to store.
+
+---
+
+## The map
+
+It used to be Leaflet over raster tiles. Two problems: panning was a grid of
+images being swapped, and the tile URL pointed at `mt1.google.com`, which is
+Google's internal endpoint and not something a public app may use.
+
+It is MapLibre now, with free CARTO vector tiles and no key. Everything on top
+is a layer: stops as circles sized the way the operator sizes theirs, the route
+as a line with direction arrows drawn along it, the chosen stop as a pin, the
+bus as a rotated symbol, your own position as a dot. Taps are answered from
+what is actually drawn, so a stop under a route line is still the stop you hit.
+
+The cost is real and worth writing down: gzipped JavaScript went from 147 KB to
+345 KB, because MapLibre is much heavier than Leaflet. Loading the map lazily
+would win most of that back and is not done yet.
+
+---
+
+## Things that were harder than they looked
+
+**Carris returns the whole service day for a stop, past arrivals included.** The
+alert check has to skip what already happened and take the next future one,
+otherwise it decides the bus went by hours ago and cancels the alert.
+
+**Buses run past midnight.** The GTFS feed writes those trips as `24:34:02`,
+not `00:34:02` the next day. Naive parsing put the first observed passages a day
+early, which the collection then compared against the wrong schedule.
+
+**MapLibre keeps the padding you give `easeTo`.** It sits on the transform
+afterwards, so the next `fitBounds` adds the same padding a second time. With a
+bottom sheet covering 55% of a phone screen that is more padding than the screen
+has, and the map silently refuses to move. It only ever showed on phones.
+
+**The worker is not bundled for you.** MapLibre builds its worker URL at runtime
+from `import.meta.url`, so the bundler never sees the string, never emits the
+file, and the deployed app gets a 404 and a black canvas. The dev server hides
+it completely, because it serves the package from `node_modules`.
+
+**Layer order is not what you assume.** Inserting map layers before the first
+symbol layer in the style puts them under the roads in CARTO positron, which
+paints tarmac over the stops. Dark matter puts its first symbol layer much
+later, so the same code looks fine on one theme and broken on the other.
 
 ---
 
 ## Tech stack
 
-| Layer | Choice | Notes |
-|-------|--------|-------|
-| Framework | React + TypeScript | |
-| Build | Vite | |
-| Styling | Tailwind CSS | Custom Carris colour palette |
-| Map | Leaflet + react-leaflet | Canvas renderer for the stop layer |
-| Data fetching | SWR | Caching and refresh on focus |
-| Backend | Vercel Functions (Node) | Free tier |
-| Database | Upstash Redis | Free tier |
-| Push | web-push library with VAPID | No third-party service |
-| Cron | cron-job.org | Free, runs every minute |
-| Icons | lucide-react | |
-| API | api.carrismetropolitana.pt | Public, no key needed |
+| Layer | Choice |
+|---|---|
+| Frontend | React 19, TypeScript, Vite, Tailwind |
+| Map | MapLibre GL JS with CARTO vector tiles |
+| Data fetching | SWR, plus a SignalR client for live positions |
+| Backend | .NET 10, ASP.NET Core Minimal API |
+| Data access | EF Core against Azure SQL |
+| Background work | Two Azure Container Apps Jobs on cron |
+| Key-value store | Upstash Redis, over its REST API |
+| Push | web-push with VAPID, no third-party service |
+| Hosting | Vercel for the app, Azure Container Apps for the API |
+| Tests | Vitest on the front, xUnit on the back |
+| Source of truth | api.carrismetropolitana.pt, public, no key |
 
 ---
 
-## Project structure
+## What is in the repo
 
-```
-api/                       # Vercel Functions
-  _lib/
-    kv.ts                  # Redis client (Upstash)
-    types.ts               # Alert / subscription shapes + storage keys
-  alerts/
-    index.ts               # POST /api/alerts   GET /api/alerts
-    [id].ts                # DELETE /api/alerts/:id (owner check)
-  cron-check-alerts.ts     # Cron worker: polls Carris, sends web-push
-  debug-alerts.ts          # Diagnostic dump (token protected)
-
-public/
-  sw.js                    # Service worker: cache + push + notification click
+```text
+backend/
+  src/
+    BusLisbon.Api/            Minimal API, SignalR hub, EF Core model
+    BusLisbon.AlertJob/       cron job: due alerts -> web-push
+    BusLisbon.CollectionJob/  cron job: passages -> SQL -> ranking
+  tests/
+    BusLisbon.Api.Tests/      174 tests, SQLite in memory
 
 src/
   components/
-    TrackingMap.tsx        # Leaflet map, layers, buttons
-    StopDetailsPanel.tsx   # Bottom panel: arrival times, bells
-    AlertSetupModal.tsx    # Threshold picker
-    AlertsPanel.tsx        # Pending alerts list + cancel
-    NotificationBell.tsx   # Reusable bell button
-    SearchBar.tsx          # Stop search
-    BusMarker.tsx          # Animated bus icon
-    SplashScreen.tsx
+    VectorMap.tsx             the map: sources, layers, camera
+    MapControls.tsx           the floating buttons
+    StopDetailsPanel.tsx      the bottom sheet: arrivals, bells
+    SearchBar.tsx             stop search, shrinks to an icon
+    AlertsPanel.tsx           pending alerts
+    ReliabilityPanel.tsx      the line ranking
   services/
-    api.ts                 # Carris API hooks (SWR)
-    push.ts                # Alerts API client
-    history.ts             # Local arrival tracking
-  hooks/
-    useAlerts.ts           # Alerts store
-    useFavorites.ts        # Favourites in localStorage
-  App.tsx                  # Layout, splash, notification handling
-  index.css                # Global styles
+    api.ts                    Carris hooks
+    gateway.ts                our own API
+    realtime.ts               SignalR stream
+    stopsLayer.ts             stop geometry and sizing
+    routeLayer.ts             route line, arrows, waypoints
+    vehicleLayer.ts           the bus marker and its movement
+    framing.ts                what the camera should be looking at
+    userLocation.ts           permission and the blue dot
+    reliability.ts            ranking client
+
+.github/workflows/            frontend checks, backend build and deploy,
+                              and a scheduled check that the Carris API
+                              still looks the way we expect
 ```
 
 ---
 
-## Getting started
+## Running it
+
+The frontend on its own talks straight to Carris and works without the backend,
+minus the live stream, the alerts and the ranking:
 
 ```bash
-git clone https://github.com/KennedySilva8907/Bus-Lisbon.git
-cd Bus-Lisbon
 npm install
-npm run dev          # http://localhost:5173
+npm run dev
 ```
 
-For the full setup of the push notifications backend (VAPID keys, Upstash,
-environment variables, external cron), see
+With the backend, from PowerShell — Git Bash rewrites `/gw` into a Windows path
+and the app ends up fetching from a file:
+
+```powershell
+cd backend/src/BusLisbon.Api
+dotnet run                      # http://localhost:5058
+
+$env:VITE_GATEWAY_PROXY_TARGET = "http://localhost:5058"
+$env:VITE_GATEWAY_BASE = "/gw"
+npm run dev
+```
+
+The proxy exists because the deployed API only allows its production origin.
+
+For the alerts you need VAPID keys and an Upstash database. See
 [`docs/PUSH_NOTIFICATIONS_SETUP.md`](docs/PUSH_NOTIFICATIONS_SETUP.md).
 
 ---
 
 ## What I would build next
 
-- A reliability score per line or stop, using the arrival data the app already
-  tracks
-- Line-level alerts ("any 758 here") instead of alerts tied to one specific bus
-- Automated end-to-end tests
-- Optional accounts, so alerts can follow you across devices
+- Load the map lazily, and get most of that 200 KB back
+- Line-level alerts — "any 758 here" — instead of alerts tied to one bus
+- Sample arrival estimates through the day, so the ranking can say whether a
+  prediction was any good and not just whether the bus was on time
+- End-to-end tests
 
 ---
 

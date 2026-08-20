@@ -142,7 +142,7 @@ function App() {
       {showSplash && <SplashScreen fading={splashFading} />}
 
       {/* Search Bar Overlay */}
-      <SearchBar onStopSelect={handleStopSelect} favorites={favorites} />
+      <SearchBar onStopSelect={handleStopSelect} favorites={favorites} tuckAway={!!selectedStop} />
 
       {/* Main Map Area */}
       <main className="flex-1 w-full h-full z-0">

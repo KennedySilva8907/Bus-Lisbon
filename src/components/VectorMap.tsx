@@ -56,14 +56,12 @@ import {
 } from '../services/vehicleLayer';
 import {
   FRAME_MAX_ZOOM,
-  FRAME_MIN_ZOOM,
   FRAME_STOP_ZOOM,
   PANEL_ELEMENT_ID,
   PANEL_SETTLE_MS,
   coveredHeight,
   frameAround,
   framePadding,
-  tooWideToFrame,
 } from '../services/framing';
 import {
   LOCATED_ONCE_KEY,
@@ -512,14 +510,6 @@ export default function VectorMap({
       [frame.southWest.lon, frame.southWest.lat],
       [frame.northEast.lon, frame.northEast.lat],
     ];
-
-    if (tooWideToFrame(instance.cameraForBounds(bounds, { padding })?.zoom)) {
-      const anchor = stop ?? bus;
-
-      instance.easeTo({ center: [anchor.lon, anchor.lat], zoom: FRAME_MIN_ZOOM, padding, duration: 900 });
-
-      return;
-    }
 
     instance.fitBounds(bounds, { padding, duration: 900, maxZoom: FRAME_MAX_ZOOM });
   }, [easeToPoint]);

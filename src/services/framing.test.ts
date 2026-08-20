@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   FRAME_GAP,
-  FRAME_MIN_ZOOM,
   FRAME_MARGIN,
   FRAME_MIN_VIEW,
   FRAME_TOP,
   coveredHeight,
   frameAround,
   framePadding,
-  tooWideToFrame,
 } from './framing';
 
 const mapBox = { top: 0, bottom: 800, left: 0, right: 400 };
@@ -87,21 +85,5 @@ describe('framePadding', () => {
 
   it('drops the side margins on a narrow map rather than squeezing it flat', () => {
     expect(framePadding(180, 800, 0).left).toBe(20);
-  });
-});
-
-describe('tooWideToFrame', () => {
-  it('accepts a frame that still shows some street', () => {
-    expect(tooWideToFrame(FRAME_MIN_ZOOM)).toBe(false);
-    expect(tooWideToFrame(16)).toBe(false);
-  });
-
-  it('rejects a frame so wide that neither end is readable', () => {
-    expect(tooWideToFrame(11.95)).toBe(true);
-  });
-
-  it('rejects a zoom the map could not work out', () => {
-    expect(tooWideToFrame(undefined)).toBe(true);
-    expect(tooWideToFrame(NaN)).toBe(true);
   });
 });

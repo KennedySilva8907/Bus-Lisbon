@@ -28,7 +28,6 @@ export const FRAME_SIDE = 40;
 export const FRAME_GAP = 56;
 export const FRAME_MIN_VIEW = 140;
 export const PANEL_SETTLE_MS = 340;
-export const FRAME_MIN_ZOOM = 13.5;
 export const FRAME_MAX_ZOOM = 17;
 export const FRAME_STOP_ZOOM = 16;
 export const PANEL_ELEMENT_ID = 'stop-details-panel';
@@ -66,8 +65,4 @@ export function framePadding(width: number, height: number, covered: number): In
   const side = Math.min(FRAME_SIDE, Math.max(0, Math.floor((width - FRAME_MIN_VIEW) / 2)));
 
   return { top, bottom, left: side, right: side };
-}
-
-export function tooWideToFrame(zoom: number | undefined): boolean {
-  return !Number.isFinite(zoom) || (zoom as number) < FRAME_MIN_ZOOM;
 }

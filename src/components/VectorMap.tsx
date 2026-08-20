@@ -36,7 +36,25 @@ import {
   waypointRadius,
   waypointStrokeWidth,
 } from '../services/routeLayer';
-import type { Stop } from '../services/api';
+import {
+  SLIDE_MS,
+  VEHICLE_GLOW_LAYER,
+  VEHICLE_IMAGE,
+  VEHICLE_IMAGE_HEIGHT,
+  VEHICLE_IMAGE_RATIO,
+  VEHICLE_IMAGE_URL,
+  VEHICLE_IMAGE_WIDTH,
+  VEHICLE_LAYER,
+  VEHICLE_SOURCE,
+  placeVehicle,
+  slideBetween,
+  tooFarToSlide,
+  toVehicleCollection,
+  vehicleGlowRadius,
+  vehicleSize,
+  type Placed,
+} from '../services/vehicleLayer';
+import type { Stop, Vehicle } from '../services/api';
 
 export interface SelectedRoute {
   shape: number[][];
@@ -49,6 +67,7 @@ interface VectorMapProps {
   stops: Stop[];
   selectedStop: Stop | null;
   route: SelectedRoute;
+  vehicle: Vehicle | null;
   isDarkMap: boolean;
   onStopSelect: (stop: Stop) => void;
 }
@@ -57,16 +76,55 @@ function firstLabelLayer(map: MapLibreMap): string | undefined {
   return map.getStyle().layers.find(layer => layer.type === 'symbol')?.id;
 }
 
-function loadPin(map: MapLibreMap) {
-  if (map.hasImage(SELECTED_PIN_IMAGE)) return;
+function loadImageFile(
+  map: MapLibreMap,
+  name: string,
+  url: string,
+  width: number,
+  height: number,
+  ratio = 1
+) {
+  if (map.hasImage(name)) return;
 
-  const pin = new Image(96, 124);
+  const picture = new Image(width * ratio, height * ratio);
 
-  pin.onload = () => {
-    if (!map.hasImage(SELECTED_PIN_IMAGE)) map.addImage(SELECTED_PIN_IMAGE, pin);
+  picture.onload = () => {
+    if (!map.hasImage(name)) map.addImage(name, picture, { pixelRatio: ratio });
   };
 
-  pin.src = SELECTED_PIN_URL;
+  picture.src = url;
+}
+
+const VEHICLE_LAYERS = [VEHICLE_GLOW_LAYER, VEHICLE_LAYER];
+
+function paintVehicle(map: MapLibreMap) {
+  if (map.getLayer(VEHICLE_LAYER)) return;
+
+  map.addLayer({
+    id: VEHICLE_GLOW_LAYER,
+    type: 'circle',
+    source: VEHICLE_SOURCE,
+    paint: {
+      'circle-radius': vehicleGlowRadius as never,
+      'circle-color': '#FFCC00',
+      'circle-opacity': 0.32,
+      'circle-blur': 1,
+    },
+  });
+
+  map.addLayer({
+    id: VEHICLE_LAYER,
+    type: 'symbol',
+    source: VEHICLE_SOURCE,
+    layout: {
+      'icon-image': VEHICLE_IMAGE,
+      'icon-size': vehicleSize as never,
+      'icon-rotate': ['get', 'bearing'],
+      'icon-rotation-alignment': 'map',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+    },
+  });
 }
 
 function lightenRoadNames(map: MapLibreMap, over: boolean) {
@@ -177,7 +235,14 @@ function paintStops(map: MapLibreMap, isDarkMap: boolean, before?: string) {
   });
 }
 
-export default function VectorMap({ stops, selectedStop, route, isDarkMap, onStopSelect }: VectorMapProps) {
+export default function VectorMap({
+  stops,
+  selectedStop,
+  route,
+  vehicle,
+  isDarkMap,
+  onStopSelect,
+}: VectorMapProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
   const collection = useRef(toStopCollection(stops));
@@ -186,6 +251,8 @@ export default function VectorMap({ stops, selectedStop, route, isDarkMap, onSto
   const known = useRef(stops);
   const select = useRef(onStopSelect);
   const startedDark = useRef(isDarkMap);
+  const drawnAt = useRef<Placed | null>(placeVehicle(vehicle));
+  const sliding = useRef(0);
 
   useEffect(() => {
     select.current = onStopSelect;
@@ -235,6 +302,38 @@ export default function VectorMap({ stops, selectedStop, route, isDarkMap, onSto
   }, [route]);
 
   useEffect(() => {
+    const instance = map.current;
+    const target = placeVehicle(vehicle);
+    const source = instance?.getSource(VEHICLE_SOURCE) as GeoJSONSource | undefined;
+
+    cancelAnimationFrame(sliding.current);
+
+    if (!target || !drawnAt.current || tooFarToSlide(drawnAt.current, target)) {
+      drawnAt.current = target;
+      source?.setData(toVehicleCollection(target) as never);
+
+      return;
+    }
+
+    const from = drawnAt.current;
+    const started = performance.now();
+
+    const step = () => {
+      const fraction = (performance.now() - started) / SLIDE_MS;
+      const now = slideBetween(from, target, fraction);
+
+      drawnAt.current = now;
+      source?.setData(toVehicleCollection(now) as never);
+
+      if (fraction < 1) sliding.current = requestAnimationFrame(step);
+    };
+
+    sliding.current = requestAnimationFrame(step);
+
+    return () => cancelAnimationFrame(sliding.current);
+  }, [vehicle]);
+
+  useEffect(() => {
     if (!container.current || map.current) return;
 
     const instance = new MapLibreMap({
@@ -263,12 +362,33 @@ export default function VectorMap({ stops, selectedStop, route, isDarkMap, onSto
         instance.addSource(WAYPOINTS_SOURCE, { type: 'geojson', data: waypoints.current as never });
       }
 
-      loadPin(instance);
+      if (!instance.getSource(VEHICLE_SOURCE)) {
+        instance.addSource(VEHICLE_SOURCE, {
+          type: 'geojson',
+          data: toVehicleCollection(drawnAt.current) as never,
+        });
+      }
+
+      loadImageFile(instance, SELECTED_PIN_IMAGE, SELECTED_PIN_URL, 96, 124);
+      loadImageFile(
+        instance,
+        VEHICLE_IMAGE,
+        VEHICLE_IMAGE_URL,
+        VEHICLE_IMAGE_WIDTH,
+        VEHICLE_IMAGE_HEIGHT,
+        VEHICLE_IMAGE_RATIO
+      );
 
       const before = firstLabelLayer(instance);
 
       paintRoute(instance, before);
       paintStops(instance, startedDark.current, before);
+      paintVehicle(instance);
+
+      for (const id of VEHICLE_LAYERS) {
+        if (instance.getLayer(id)) instance.moveLayer(id);
+      }
+
       lightenRoadNames(instance, shape.current.features.length > 0);
     };
 

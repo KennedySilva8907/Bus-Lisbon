@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Map as MapLibreMap, NavigationControl, type GeoJSONSource, type MapGeoJSONFeature } from 'maplibre-gl';
+import { AttributionControl, Map as MapLibreMap, type GeoJSONSource, type MapGeoJSONFeature } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { LISBON, basemapStyle } from '../services/basemap';
 import {
@@ -242,13 +242,13 @@ export default function VectorMap({ stops, selectedStop, route, isDarkMap, onSto
       style: basemapStyle(startedDark.current),
       center: [LISBON.lon, LISBON.lat],
       zoom: LISBON.zoom,
-      attributionControl: { compact: true },
+      attributionControl: false,
       dragRotate: false,
       pitchWithRotate: false,
     });
 
     instance.touchZoomRotate.disableRotation();
-    instance.addControl(new NavigationControl({ showCompass: false }), 'bottom-left');
+    instance.addControl(new AttributionControl({ compact: true }), 'bottom-right');
 
     const dress = () => {
       if (!instance.getSource(STOPS_SOURCE)) {

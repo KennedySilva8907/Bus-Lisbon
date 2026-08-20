@@ -55,11 +55,15 @@ import {
   type Placed,
 } from '../services/vehicleLayer';
 import {
+  FRAME_MAX_ZOOM,
+  FRAME_MIN_ZOOM,
+  FRAME_STOP_ZOOM,
   PANEL_ELEMENT_ID,
   PANEL_SETTLE_MS,
   coveredHeight,
   frameAround,
   framePadding,
+  tooWideToFrame,
 } from '../services/framing';
 import {
   LOCATED_ONCE_KEY,
@@ -183,6 +187,26 @@ function paintVehicle(map: MapLibreMap) {
       'icon-ignore-placement': true,
     },
   });
+}
+
+function showChosenStop(map: MapLibreMap, stopId: string) {
+  if (!map.getLayer(SELECTED_LAYER)) return;
+
+  const chosen = ['==', ['get', 'stopId'], stopId] as never;
+
+  map.setFilter(SELECTED_LAYER, chosen);
+  map.setFilter(SELECTED_DOT_LAYER, chosen);
+}
+
+function colourRoute(map: MapLibreMap, route: SelectedRoute) {
+  if (map.getLayer(ROUTE_LINE_LAYER)) {
+    map.setPaintProperty(ROUTE_LINE_LAYER, 'line-color', route.colour);
+  }
+
+  if (map.getLayer(WAYPOINTS_LAYER)) {
+    map.setPaintProperty(WAYPOINTS_LAYER, 'circle-color', route.textColour);
+    map.setPaintProperty(WAYPOINTS_LAYER, 'circle-stroke-color', route.colour);
+  }
 }
 
 function mutePassingStops(map: MapLibreMap, following: boolean) {
@@ -325,12 +349,12 @@ export default function VectorMap({
   const select = useRef(onStopSelect);
   const dark = useRef(isDarkMap);
   const drawnAt = useRef<Placed | null>(placeVehicle(vehicle));
-  const latest = useRef({ vehicle, selectedStop });
+  const latest = useRef({ vehicle, selectedStop, route });
   const sliding = useRef(0);
   const fix = useRef<Fix | null>(null);
 
   useEffect(() => {
-    latest.current = { vehicle, selectedStop };
+    latest.current = { vehicle, selectedStop, route };
   });
 
   useEffect(() => {
@@ -359,15 +383,7 @@ export default function VectorMap({
 
     const following = shape.current.features.length > 0;
 
-    if (instance.getLayer(ROUTE_LINE_LAYER)) {
-      instance.setPaintProperty(ROUTE_LINE_LAYER, 'line-color', route.colour);
-    }
-
-    if (instance.getLayer(WAYPOINTS_LAYER)) {
-      instance.setPaintProperty(WAYPOINTS_LAYER, 'circle-color', route.textColour);
-      instance.setPaintProperty(WAYPOINTS_LAYER, 'circle-stroke-color', route.colour);
-    }
-
+    colourRoute(instance, route);
     lightenRoadNames(instance, following);
     mutePassingStops(instance, following);
   }, [route]);
@@ -473,26 +489,40 @@ export default function VectorMap({
     const instance = map.current;
     const box = container.current?.getBoundingClientRect();
     const bus = placeVehicle(latest.current.vehicle);
-
-    if (!instance || !box || !bus) return;
-
     const chosen = latest.current.selectedStop;
-    const stop = chosen ? { lon: Number(chosen.lon), lat: Number(chosen.lat) } : null;
+    const lon = Number(chosen?.lon);
+    const lat = Number(chosen?.lat);
+    const stop = Number.isFinite(lon) && Number.isFinite(lat) ? { lon, lat } : null;
+
+    if (!instance || !box) return;
+
+    if (!bus) {
+      if (stop) easeToPoint(stop, FRAME_STOP_ZOOM);
+
+      return;
+    }
+
     const frame = frameAround(stop ? [stop, bus] : [bus]);
 
     if (!frame) return;
 
     const panel = document.getElementById(PANEL_ELEMENT_ID)?.getBoundingClientRect() ?? null;
+    const padding = framePadding(box.width, box.height, coveredHeight(box, panel));
+    const bounds: [[number, number], [number, number]] = [
+      [frame.southWest.lon, frame.southWest.lat],
+      [frame.northEast.lon, frame.northEast.lat],
+    ];
 
-    instance.fitBounds(
-      [[frame.southWest.lon, frame.southWest.lat], [frame.northEast.lon, frame.northEast.lat]],
-      {
-        padding: framePadding(box.width, box.height, coveredHeight(box, panel)),
-        duration: 900,
-        maxZoom: 17,
-      }
-    );
-  }, []);
+    if (tooWideToFrame(instance.cameraForBounds(bounds, { padding })?.zoom)) {
+      const anchor = stop ?? bus;
+
+      instance.easeTo({ center: [anchor.lon, anchor.lat], zoom: FRAME_MIN_ZOOM, padding, duration: 900 });
+
+      return;
+    }
+
+    instance.fitBounds(bounds, { padding, duration: 900, maxZoom: FRAME_MAX_ZOOM });
+  }, [easeToPoint]);
 
   useEffect(() => {
     fitToVehicle();
@@ -563,7 +593,10 @@ export default function VectorMap({
       paintStops(instance, dark.current, before);
       paintUserLocation(instance);
       paintVehicle(instance);
+
+      colourRoute(instance, latest.current.route);
       mutePassingStops(instance, shape.current.features.length > 0);
+      showChosenStop(instance, latest.current.selectedStop?.id ?? '');
 
       for (const id of VEHICLE_LAYERS) {
         if (instance.getLayer(id)) instance.moveLayer(id);
@@ -610,12 +643,9 @@ export default function VectorMap({
   useEffect(() => {
     const instance = map.current;
 
-    if (!instance || !instance.getLayer(SELECTED_LAYER)) return;
+    if (!instance) return;
 
-    const chosen = ['==', ['get', 'stopId'], selectedStop?.id ?? ''] as never;
-
-    instance.setFilter(SELECTED_LAYER, chosen);
-    instance.setFilter(SELECTED_DOT_LAYER, chosen);
+    showChosenStop(instance, selectedStop?.id ?? '');
   }, [selectedStop]);
 
   return (

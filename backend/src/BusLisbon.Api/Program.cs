@@ -2,6 +2,7 @@ using BusLisbon.Api.Alerts;
 using BusLisbon.Api.Carris;
 using BusLisbon.Api.Endpoints;
 using BusLisbon.Api.Realtime;
+using BusLisbon.Api.Schedules;
 using BusLisbon.Api.Vehicles;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +14,7 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
     .AllowAnyMethod()
     .AllowCredentials()));
 CarrisClient.AddCarrisClient(builder.Services, builder.Configuration);
+TmlNetworkClient.AddTmlNetwork(builder.Services, builder.Configuration);
 builder.Services.AddSingleton<VehicleGateway>();
 builder.Services.AddSingleton<VehicleDemand>();
 builder.Services.AddSingleton<VehicleSubscriptions>();
@@ -34,6 +36,7 @@ app.MapVehicleEndpoints();
 app.MapAlertEndpoints();
 app.MapAlertDiagnosticsEndpoints();
 app.MapLineReliabilityEndpoints();
+app.MapScheduleEndpoints();
 app.MapHub<VehicleHub>("/hubs/vehicles");
 
 app.Run();

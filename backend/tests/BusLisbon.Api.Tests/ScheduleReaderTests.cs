@@ -127,3 +127,48 @@ public class ScheduleReaderTests
             pattern, "110622", "[X]2753_0_1|150|3|2359", new DateOnly(2026, 8, 21), Lisbon));
     }
 }
+
+public class ScheduleWindowTests
+{
+    [Fact]
+    public void DefaultsToTheWindowThePanelShows()
+    {
+        Assert.Equal(120, ScheduleEndpoints.Window(null));
+        Assert.Equal(120, ScheduleEndpoints.Window(0));
+        Assert.Equal(120, ScheduleEndpoints.Window(-5));
+    }
+
+    [Fact]
+    public void HonoursASmallerWindowAndCapsALargerOne()
+    {
+        Assert.Equal(30, ScheduleEndpoints.Window(30));
+        Assert.Equal(720, ScheduleEndpoints.Window(5000));
+    }
+
+    [Fact]
+    public void KeepsWhatIsAboutToHappen()
+    {
+        Assert.True(ScheduleEndpoints.Within(1000, 1000, 120));
+        Assert.True(ScheduleEndpoints.Within(1000 + (119 * 60), 1000, 120));
+    }
+
+    [Fact]
+    public void DropsWhatIsPastOrTooFarOff()
+    {
+        Assert.False(ScheduleEndpoints.Within(1000 - 300, 1000, 120));
+        Assert.False(ScheduleEndpoints.Within(1000 + (121 * 60), 1000, 120));
+    }
+
+    [Fact]
+    public void KeepsABusThatIsAMinuteLateRatherThanHidingIt()
+    {
+        Assert.True(ScheduleEndpoints.Within(1000 - 45, 1000, 120));
+    }
+
+    [Fact]
+    public void StripsTheAgencyOffALineName()
+    {
+        Assert.Equal("2753", ScheduleEndpoints.LineName("[BNA17]2753"));
+        Assert.Equal("2753", ScheduleEndpoints.LineName("2753"));
+    }
+}

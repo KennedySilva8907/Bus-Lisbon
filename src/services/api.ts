@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import useSWR from 'swr';
-import { GATEWAY_BASE, backendIsAwake, isGatewayEnabled, toVehicle, gatewayVehicleUrl, type GatewayVehicleResponse } from './gateway';
+import { GATEWAY_BASE, backendIsAwake, isFleetVehicleId, isGatewayEnabled, toVehicle, gatewayVehicleUrl, type GatewayVehicleResponse } from './gateway';
 import { freshestVehicle, useVehicleStream } from './realtime';
 import { ETA_BASE_URL, readFeed, type FeedEta } from './etaFeed';
 import { mergeArrivals, type StopSchedule } from './mergeArrivals';
@@ -122,8 +122,10 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
     ? gatewayVehicleUrl(GATEWAY_BASE, vehicleId, lineId, patternId)
     : null;
 
+  const trackedId = isFleetVehicleId(vehicleId) ? vehicleId : null;
+
   const stream = useVehicleStream(
-    gatewayUrl ? vehicleId : null,
+    gatewayUrl ? trackedId : null,
     gatewayUrl ? lineId : null,
     patternId
   );

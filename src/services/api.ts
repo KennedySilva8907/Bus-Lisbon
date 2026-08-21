@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import useSWR from 'swr';
 import { GATEWAY_BASE, backendIsAwake, isGatewayEnabled, toVehicle, gatewayVehicleUrl, type GatewayVehicleResponse } from './gateway';
 import { freshestVehicle, useVehicleStream } from './realtime';
+import { ETA_BASE_URL, readFeed, type FeedEta } from './etaFeed';
 
 const API_BASE_URL = 'https://api.carrismetropolitana.pt';
 
@@ -180,11 +181,39 @@ export function useSingleVehicle(vehicleId: string | null, lineId?: string | nul
 // any consumer of useStopETA for the same stop.
 const lastETAFetchAt = new Map<string, number>();
 
+const NO_ETAS: ETA[] = [];
+
+const etaFetcher = async (url: string): Promise<FeedEta[]> => {
+  const res = await fetch(url);
+  const json = await res.json();
+  const rows = Array.isArray(json) ? json : (json?.data ?? []);
+
+  return readFeed(rows, Math.floor(Date.now() / 1000));
+};
+
+function headsignsFor(patternIds: string[]) {
+  return Promise.all(
+    patternIds.map(async id => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/patterns/${id}`);
+
+        if (!res.ok) return [id, ''] as const;
+
+        const pattern = await res.json();
+
+        return [id, (pattern?.headsign as string | undefined) || ''] as const;
+      } catch {
+        return [id, ''] as const;
+      }
+    })
+  ).then(pairs => Object.fromEntries(pairs) as Record<string, string>);
+}
+
 export function useStopETA(stopId: string | null) {
-  const key = stopId ? `${API_BASE_URL}/stops/${stopId}/realtime` : null;
-  const { data, error, isLoading } = useSWR<ETA[]>(
+  const key = stopId ? `${ETA_BASE_URL}/realtime/eta/by-stop/${stopId}` : null;
+  const { data: feed, error, isLoading } = useSWR<FeedEta[]>(
     key,
-    fetcher,
+    etaFetcher,
     {
       refreshInterval: 8000,
       revalidateOnFocus: true,
@@ -196,12 +225,35 @@ export function useStopETA(stopId: string | null) {
     }
   );
 
+  const patternIds = useMemo(() => [...new Set((feed || []).map(e => e.patternId))].sort(), [feed]);
+
+  const { data: headsigns } = useSWR(
+    patternIds.length ? ['headsigns', patternIds.join(',')] : null,
+    () => headsignsFor(patternIds),
+    { revalidateOnFocus: false, revalidateIfStale: false, dedupingInterval: 86400000 }
+  );
+
+  const data = useMemo<ETA[]>(
+    () =>
+      feed && feed.length
+        ? feed.map(e => ({
+            line_id: e.lineId,
+            headsign: headsigns?.[e.patternId] || '',
+            estimated_arrival_unix: e.estimatedArrivalUnix,
+            scheduled_arrival_unix: 0,
+            vehicle_id: e.vehicleId,
+            pattern_id: e.patternId,
+          }))
+        : NO_ETAS,
+    [feed, headsigns]
+  );
+
   // iOS Safari pauses background timers, so a "3min" prediction may have been
   // computed minutes ago. Null until the first fetch lands — the consumer is
   // expected to treat that as "fresh" rather than infinitely stale.
   const lastUpdated = (key && lastETAFetchAt.get(key)) || null;
 
-  return { etas: data || [], lastUpdated, isLoading, isError: error };
+  return { etas: data, lastUpdated, isLoading, isError: error };
 }
 
 // ── Pattern Shape (cached indefinitely) ────────────────

@@ -16,6 +16,7 @@
 
 const BASE = 'https://api.carrismetropolitana.pt';
 const FRESH_WINDOW_SEC = 180;
+const ARRIVAL_SAMPLE = 12;
 
 const failures = [];
 const warnings = [];
@@ -50,7 +51,7 @@ function isFiniteNum(v) {
 
 // Holds values discovered in earlier checks so later checks can stay dynamic
 // (no hardcoded stop/pattern ids that could be retired by Carris).
-const discovered = { stopId: null, patternId: null };
+const discovered = { stopId: null, patternId: null, stopIds: [] };
 
 // ── 1. Vehicle positions feed (/v2/vehicles) ──────────────────────────
 async function checkVehicles() {
@@ -102,35 +103,51 @@ async function checkVehicles() {
   if (withPattern) discovered.patternId = withPattern.pattern_id;
   const withStop = positioned.find(v => v.stop_id);
   if (withStop) discovered.stopId = String(withStop.stop_id);
+  discovered.stopIds = [...new Set(positioned.filter(v => v.stop_id).map(v => String(v.stop_id)))].slice(0, ARRIVAL_SAMPLE);
 }
 
 // ── 2. Stop arrivals / ETAs (/stops/:id/realtime) ─────────────────
 async function checkArrivals() {
   const name = '/stops/:id/realtime';
-  const stopId = discovered.stopId || '170453';
-  let data;
-  try {
-    data = await getJson(`/stops/${stopId}/realtime`);
-  } catch (e) {
-    fail(name, `${e.message} (this endpoint powers the ETA panel, the alerts and the daily collection)`);
+  const stopIds = discovered.stopIds.length ? discovered.stopIds : ['170453'];
+  const answers = [];
+
+  for (const stopId of stopIds) {
+    try {
+      const data = await getJson(`/stops/${stopId}/realtime`);
+      if (!Array.isArray(data)) {
+        fail(name, `response for stop ${stopId} is not an array`);
+        return;
+      }
+      answers.push({ stopId, data });
+    } catch (e) {
+      fail(name, `${e.message} (this endpoint powers the ETA panel, the alerts and the daily collection)`);
+      return;
+    }
+  }
+
+  const withArrivals = answers.filter(a => a.data.length > 0);
+
+  if (withArrivals.length === 0) {
+    fail(
+      name,
+      `all ${answers.length} sampled stops returned an empty array — the feed is drained, ` +
+      'so the ETA panel, the alerts and the daily collection have nothing to work with ' +
+      `(stops tried: ${answers.map(a => a.stopId).join(', ')})`
+    );
     return;
   }
-  if (!Array.isArray(data)) {
-    fail(name, 'response is not an array');
-    return;
-  }
-  if (data.length === 0) {
-    warn(name, `no arrivals for stop ${stopId} right now — cannot validate fields`);
-    return;
-  }
+
+  warn(name, `${withArrivals.length} of ${answers.length} sampled stops carry arrivals`);
+
   const required = ['line_id', 'headsign', 'estimated_arrival_unix', 'scheduled_arrival_unix', 'vehicle_id', 'pattern_id'];
-  const sample = data[0];
+  const sample = withArrivals[0].data[0];
   const missing = required.filter(k => !(k in sample));
   if (missing.length) fail(name, `arrival is missing fields: ${missing.join(', ')}`);
 
-  const observed = data.filter(a => isFiniteNum(a.observed_arrival_unix));
-  if (observed.length === 0) {
-    warn(name, `no passage at stop ${stopId} carries observed_arrival_unix right now — the daily collection would store nothing for it`);
+  const observed = withArrivals.some(a => a.data.some(x => isFiniteNum(x.observed_arrival_unix)));
+  if (!observed) {
+    warn(name, 'no sampled passage carries observed_arrival_unix right now — the daily collection would store nothing');
   }
 }
 

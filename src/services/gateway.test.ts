@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toVehicle, gatewayVehicleUrl, type GatewayVehicleResponse } from './gateway';
+import { gatewayVehicleUrl, isFleetVehicleId, toVehicle, type GatewayVehicleResponse } from './gateway';
 
 const payload: GatewayVehicleResponse = {
   vehicle: {
@@ -72,5 +72,35 @@ describe('gatewayVehicleUrl', () => {
 
   it('returns null when there is nothing to track', () => {
     expect(gatewayVehicleUrl('https://api.example', null, null, null)).toBeNull();
+  });
+});
+
+describe('isFleetVehicleId', () => {
+  it('accepts the ids the fleet feed uses', () => {
+    expect(isFleetVehicleId('41|300')).toBe(true);
+    expect(isFleetVehicleId('42|2512')).toBe(true);
+  });
+
+  it('rejects the bare numbers the arrivals feed sends', () => {
+    expect(isFleetVehicleId('2600')).toBe(false);
+    expect(isFleetVehicleId('544')).toBe(false);
+  });
+
+  it('rejects nothing at all', () => {
+    expect(isFleetVehicleId(null)).toBe(false);
+    expect(isFleetVehicleId(undefined)).toBe(false);
+    expect(isFleetVehicleId('')).toBe(false);
+  });
+});
+
+describe('gatewayVehicleUrl with an arrivals-feed id', () => {
+  it('falls through to the line so the bus is still found', () => {
+    expect(gatewayVehicleUrl('https://api.example', '2600', '2769', '2769_0_1'))
+      .toBe('https://api.example/api/vehicles/by-line/2769?patternId=2769_0_1');
+  });
+
+  it('still goes straight to the vehicle when the id is a fleet one', () => {
+    expect(gatewayVehicleUrl('https://api.example', '42|2512', '2769', '2769_0_1'))
+      .toBe('https://api.example/api/vehicles/42%7C2512');
   });
 });

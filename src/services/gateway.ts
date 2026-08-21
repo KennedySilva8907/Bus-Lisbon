@@ -40,13 +40,17 @@ export function toVehicle(payload: GatewayVehicleResponse): Vehicle {
   };
 }
 
+export function isFleetVehicleId(vehicleId: string | null | undefined): boolean {
+  return typeof vehicleId === 'string' && /^\d+\|\d+$/.test(vehicleId);
+}
+
 export function gatewayVehicleUrl(
   base: string,
   vehicleId: string | null,
   lineId: string | null | undefined,
   patternId: string | null | undefined
 ): string | null {
-  if (vehicleId) return `${base}/api/vehicles/${encodeURIComponent(vehicleId)}`;
+  if (isFleetVehicleId(vehicleId)) return `${base}/api/vehicles/${encodeURIComponent(vehicleId as string)}`;
   if (!lineId) return null;
 
   const path = `${base}/api/vehicles/by-line/${encodeURIComponent(lineId)}`;

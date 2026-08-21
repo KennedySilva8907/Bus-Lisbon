@@ -59,9 +59,16 @@ export interface FeedEta {
   estimatedArrivalUnix: number;
 }
 
-export function toFeedEta(raw: RawEta): FeedEta | null {
+export function readEtaSeconds(value: string | number | undefined | null): number | null {
+  const seconds = Number(value);
+
+  return Number.isFinite(seconds) && String(value).trim() !== '' ? Math.round(seconds) : null;
+}
+
+export function toFeedEta(raw: RawEta, nowUnix: number): FeedEta | null {
   const trip = readTripId(raw.trip_id);
-  const arrival = readEtaAt(raw.eta_at);
+  const countdown = readEtaSeconds(raw.eta_seconds);
+  const arrival = countdown === null ? readEtaAt(raw.eta_at) : nowUnix + countdown;
 
   if (!trip || arrival === null) return null;
 
@@ -77,7 +84,7 @@ export function toFeedEta(raw: RawEta): FeedEta | null {
 
 export function readFeed(raw: RawEta[], nowUnix: number): FeedEta[] {
   return raw
-    .map(toFeedEta)
+    .map(row => toFeedEta(row, nowUnix))
     .filter((eta): eta is FeedEta => eta !== null)
     .filter(eta => eta.estimatedArrivalUnix > nowUnix - ETA_MAX_AGE_SECONDS)
     .sort((a, b) => a.estimatedArrivalUnix - b.estimatedArrivalUnix);

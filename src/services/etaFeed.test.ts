@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readEtaAt, readFeed, readTripId, toFeedEta } from './etaFeed';
+import { readEtaAt, readEtaSeconds, readFeed, readTripId, toFeedEta } from './etaFeed';
 
 describe('readTripId', () => {
   it('reads the shape most stops send', () => {
@@ -59,45 +59,79 @@ describe('readEtaAt', () => {
 });
 
 describe('toFeedEta', () => {
+  const now = 1787333886;
+
+  it('trusts the countdown over the timestamp', () => {
+    const eta = toFeedEta({ trip_id: '[BNA17]2753_0_1|1', eta_seconds: 300, eta_at: '2026-08-05 16:46:19.000' }, now)!;
+
+    expect(eta.estimatedArrivalUnix).toBe(now + 300);
+  });
+
+  it('falls back to the timestamp when there is no countdown', () => {
+    const eta = toFeedEta({ trip_id: '[BNA17]2753_0_1|1', eta_at: (now + 120) * 1000 }, now)!;
+
+    expect(eta.estimatedArrivalUnix).toBe(now + 120);
+  });
+
   it('carries the vehicle across as text', () => {
-    const eta = toFeedEta({ trip_id: '[BNA17]2753_0_1|1', vehicle_id: 1257, eta_at: 1787333886000 })!;
+    const eta = toFeedEta({ trip_id: '[BNA17]2753_0_1|1', vehicle_id: 1257, eta_seconds: 60 }, now)!;
 
     expect(eta.vehicleId).toBe('1257');
     expect(eta.lineId).toBe('2753');
   });
 
   it('refuses an entry it cannot place on a line', () => {
-    expect(toFeedEta({ trip_id: 'lixo', eta_at: 1787333886000 })).toBeNull();
+    expect(toFeedEta({ trip_id: 'lixo', eta_seconds: 60 }, now)).toBeNull();
   });
 
-  it('refuses an entry with no time', () => {
-    expect(toFeedEta({ trip_id: '[BNA17]2753_0_1|1' })).toBeNull();
+  it('refuses an entry with no time at all', () => {
+    expect(toFeedEta({ trip_id: '[BNA17]2753_0_1|1' }, now)).toBeNull();
+  });
+});
+
+describe('readEtaSeconds', () => {
+  it('reads it as a number or as text', () => {
+    expect(readEtaSeconds(288)).toBe(288);
+    expect(readEtaSeconds('288')).toBe(288);
+  });
+
+  it('keeps a bus that is already late', () => {
+    expect(readEtaSeconds(-60)).toBe(-60);
+  });
+
+  it('gives nothing when it is missing', () => {
+    expect(readEtaSeconds(undefined)).toBeNull();
+    expect(readEtaSeconds('')).toBeNull();
+    expect(readEtaSeconds('tarde')).toBeNull();
   });
 });
 
 describe('readFeed', () => {
   const now = 1787333886;
 
-  it('drops the stale rows some stops still serve', () => {
+  it('keeps a row whose timestamp is stale but whose countdown is live', () => {
     const feed = readFeed([
-      { trip_id: '[BNA17]2753_0_1|1', eta_at: (now + 300) * 1000 },
-      { trip_id: '4701_0_2|500', eta_at: '2026-08-05 16:46:19.000' },
+      { trip_id: '4701_0_2|500', eta_seconds: 400, eta_at: '2026-08-05 16:46:19.000' },
     ], now);
 
     expect(feed).toHaveLength(1);
-    expect(feed[0].lineId).toBe('2753');
+    expect(feed[0].estimatedArrivalUnix).toBe(now + 400);
+  });
+
+  it('drops a row that is stale with no countdown to save it', () => {
+    expect(readFeed([{ trip_id: '4701_0_2|500', eta_at: '2026-08-05 16:46:19.000' }], now)).toHaveLength(0);
   });
 
   it('keeps a bus that is a minute late rather than hiding it', () => {
-    const feed = readFeed([{ trip_id: '[BNA17]2753_0_1|1', eta_at: (now - 60) * 1000 }], now);
+    const feed = readFeed([{ trip_id: '[BNA17]2753_0_1|1', eta_seconds: -60 }], now);
 
     expect(feed).toHaveLength(1);
   });
 
   it('puts the next bus first', () => {
     const feed = readFeed([
-      { trip_id: '[BNA17]2753_0_1|1', eta_at: (now + 900) * 1000 },
-      { trip_id: '[BNA17]2754_0_1|1', eta_at: (now + 120) * 1000 },
+      { trip_id: '[BNA17]2753_0_1|1', eta_seconds: 900 },
+      { trip_id: '[BNA17]2754_0_1|1', eta_seconds: 120 },
     ], now);
 
     expect(feed.map(e => e.lineId)).toEqual(['2754', '2753']);

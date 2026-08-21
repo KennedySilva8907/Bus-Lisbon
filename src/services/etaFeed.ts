@@ -54,9 +54,16 @@ export interface FeedEta {
   lineId: string;
   patternId: string;
   agencyPatternId: string;
+  departure: string;
   vehicleId: string;
   stopSequence: number;
   estimatedArrivalUnix: number;
+}
+
+export function departureTag(tripId: string | undefined | null): string {
+  const cut = String(tripId ?? '').lastIndexOf('|');
+
+  return cut >= 0 ? String(tripId).slice(cut + 1) : '';
 }
 
 export function readEtaSeconds(value: string | number | undefined | null): number | null {
@@ -76,6 +83,7 @@ export function toFeedEta(raw: RawEta, nowUnix: number): FeedEta | null {
     lineId: trip.lineId,
     patternId: trip.patternId,
     agencyPatternId: trip.agencyPatternId,
+    departure: departureTag(raw.trip_id),
     vehicleId: String(raw.vehicle_id ?? ''),
     stopSequence: Number(raw.stop_sequence) || 0,
     estimatedArrivalUnix: arrival,

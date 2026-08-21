@@ -3,6 +3,7 @@ import useSWR from 'swr';
 import { GATEWAY_BASE, backendIsAwake, isGatewayEnabled, toVehicle, gatewayVehicleUrl, type GatewayVehicleResponse } from './gateway';
 import { freshestVehicle, useVehicleStream } from './realtime';
 import { ETA_BASE_URL, readFeed, type FeedEta } from './etaFeed';
+import { mergeArrivals, type StopSchedule } from './mergeArrivals';
 
 const API_BASE_URL = 'https://api.carrismetropolitana.pt';
 
@@ -233,19 +234,18 @@ export function useStopETA(stopId: string | null) {
     { revalidateOnFocus: false, revalidateIfStale: false, dedupingInterval: 86400000 }
   );
 
+  const { data: timetable } = useSWR<StopSchedule[]>(
+    stopId && isGatewayEnabled() ? `${GATEWAY_BASE}/api/schedules/by-stop/${stopId}` : null,
+    fetcher,
+    { refreshInterval: 300000, revalidateOnFocus: false, keepPreviousData: true }
+  );
+
   const data = useMemo<ETA[]>(
     () =>
-      feed && feed.length
-        ? feed.map(e => ({
-            line_id: e.lineId,
-            headsign: headsigns?.[e.patternId] || '',
-            estimated_arrival_unix: e.estimatedArrivalUnix,
-            scheduled_arrival_unix: 0,
-            vehicle_id: e.vehicleId,
-            pattern_id: e.patternId,
-          }))
+      (feed && feed.length) || (timetable && timetable.length)
+        ? mergeArrivals(feed || [], timetable || [], headsigns || {})
         : NO_ETAS,
-    [feed, headsigns]
+    [feed, timetable, headsigns]
   );
 
   // iOS Safari pauses background timers, so a "3min" prediction may have been

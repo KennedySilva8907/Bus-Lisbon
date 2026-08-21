@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readEtaAt, readEtaSeconds, readFeed, readTripId, toFeedEta } from './etaFeed';
+import { departureTag, readEtaAt, readEtaSeconds, readFeed, readTripId, toFeedEta } from './etaFeed';
 
 describe('readTripId', () => {
   it('reads the shape most stops send', () => {
@@ -135,5 +135,16 @@ describe('readFeed', () => {
     ], now);
 
     expect(feed.map(e => e.lineId)).toEqual(['2754', '2753']);
+  });
+});
+
+describe('departureTag', () => {
+  it('reads the departure off the tail of a trip id', () => {
+    expect(departureTag('[0277F][BNA17]2753_0_1|150|3|1835')).toBe('1835');
+  });
+
+  it('gives nothing when there is no tail', () => {
+    expect(departureTag('2753_0_1')).toBe('');
+    expect(departureTag(undefined)).toBe('');
   });
 });

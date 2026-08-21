@@ -244,8 +244,8 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                         let directionLabel = '';
                         let directionColor = 'text-gray-400';
                         let directionBg = 'bg-gray-400/10';
-                        if (delaySec < -60) { directionLabel = 'Adiantado'; directionColor = 'text-blue-400'; directionBg = 'bg-blue-400/10'; }
-                        else if (delaySec > 120) { directionLabel = `+${Math.round(delaySec / 60)}min`; directionColor = 'text-orange-400'; directionBg = 'bg-orange-400/10'; }
+                        if (delaySec < -60) { directionLabel = `Adiantado ${Math.round(-delaySec / 60)}min`; directionColor = 'text-blue-400'; directionBg = 'bg-blue-400/10'; }
+                        else if (delaySec > 120) { directionLabel = `Atrasado ${Math.round(delaySec / 60)}min`; directionColor = 'text-orange-400'; directionBg = 'bg-orange-400/10'; }
                         else { directionLabel = 'Pontual'; directionColor = 'text-green-400'; directionBg = 'bg-green-400/10'; }
 
                         const canTrack = !!eta.vehicle_id;
@@ -292,8 +292,8 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                     let directionLabel = '';
                     let directionColor = 'text-gray-400';
                     let directionBg = 'bg-gray-400/10';
-                    if (delaySec < -60) { directionLabel = 'Adiantado'; directionColor = 'text-blue-400'; directionBg = 'bg-blue-400/10'; }
-                    else if (delaySec > 120) { directionLabel = `+${Math.round(delaySec / 60)}min`; directionColor = 'text-orange-400'; directionBg = 'bg-orange-400/10'; }
+                    if (delaySec < -60) { directionLabel = `Adiantado ${Math.round(-delaySec / 60)}min`; directionColor = 'text-blue-400'; directionBg = 'bg-blue-400/10'; }
+                    else if (delaySec > 120) { directionLabel = `Atrasado ${Math.round(delaySec / 60)}min`; directionColor = 'text-orange-400'; directionBg = 'bg-orange-400/10'; }
                     else { directionLabel = 'Pontual'; directionColor = 'text-green-400'; directionBg = 'bg-green-400/10'; }
 
                     const canTrack = !!eta.vehicle_id;
@@ -364,8 +364,8 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                   let directionBg = 'bg-gray-400/10';
                   if (eta.estimated_arrival_unix && eta.scheduled_arrival_unix) {
                     const delaySec = eta.estimated_arrival_unix - eta.scheduled_arrival_unix;
-                    if (delaySec < -60) { directionLabel = 'Adiantado'; directionColor = 'text-blue-400'; directionBg = 'bg-blue-400/10'; }
-                    else if (delaySec > 120) { directionLabel = `+${Math.round(delaySec / 60)}min`; directionColor = 'text-orange-400'; directionBg = 'bg-orange-400/10'; }
+                    if (delaySec < -60) { directionLabel = `Adiantado ${Math.round(-delaySec / 60)}min`; directionColor = 'text-blue-400'; directionBg = 'bg-blue-400/10'; }
+                    else if (delaySec > 120) { directionLabel = `Atrasado ${Math.round(delaySec / 60)}min`; directionColor = 'text-orange-400'; directionBg = 'bg-orange-400/10'; }
                     else { directionLabel = 'Pontual'; directionColor = 'text-green-400'; directionBg = 'bg-green-400/10'; }
                   }
 

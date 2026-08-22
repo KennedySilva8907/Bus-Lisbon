@@ -383,7 +383,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
 
                   let displayTime: string;
                   if (diffSec < -60) {
-                    displayTime = 'Atrasado';
+                    displayTime = '';
                   } else if (diffSec <= 30) {
                     displayTime = 'Agora';
                   } else if (diffMinutes <= 0) {

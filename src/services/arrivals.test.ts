@@ -13,12 +13,20 @@ const eta = (overrides: Partial<ETA>): ETA => ({
 });
 
 describe('describeArrival', () => {
-  it('lets you follow an arrival that names its bus', () => {
-    const arrival = describeArrival(eta({ vehicle_id: '41|814' }));
+  it('lets you follow an arrival that names its bus and says when it gets here', () => {
+    const arrival = describeArrival(eta({ vehicle_id: '41|814', estimated_arrival_unix: 1_755_380_180 }));
 
     expect(arrival.trackable).toBe(true);
     expect(arrival.state).toBe('boarding');
     expect(arrival.label).toBe('Em viagem');
+  });
+
+  it('will not say a bus is on its way here just because it is out on the road', () => {
+    const arrival = describeArrival(eta({ vehicle_id: '41|814', estimated_arrival_unix: 0 }));
+
+    expect(arrival.trackable).toBe(true);
+    expect(arrival.state).toBe('onTheWay');
+    expect(arrival.label).toBe('Agendado · autocarro a caminho');
   });
 
   it('refuses to follow a scheduled arrival, and says the bus is not out yet', () => {

@@ -1,6 +1,6 @@
 import type { ETA } from './api';
 
-export type ArrivalState = 'boarding' | 'predicted' | 'scheduled';
+export type ArrivalState = 'boarding' | 'onTheWay' | 'predicted' | 'scheduled';
 
 export interface ArrivalDescription {
   state: ArrivalState;
@@ -40,12 +40,16 @@ export function wentByAt(eta: ETA): number | null {
 }
 
 export function describeArrival(eta: ETA): ArrivalDescription {
-  if (eta.vehicle_id) {
+  const predicted =
+    !!eta.estimated_arrival_unix && eta.estimated_arrival_unix !== eta.scheduled_arrival_unix;
+
+  if (eta.vehicle_id && predicted) {
     return { state: 'boarding', trackable: true, label: 'Em viagem' };
   }
 
-  const predicted =
-    !!eta.estimated_arrival_unix && eta.estimated_arrival_unix !== eta.scheduled_arrival_unix;
+  if (eta.vehicle_id) {
+    return { state: 'onTheWay', trackable: true, label: 'Agendado · autocarro a caminho' };
+  }
 
   return {
     state: predicted ? 'predicted' : 'scheduled',

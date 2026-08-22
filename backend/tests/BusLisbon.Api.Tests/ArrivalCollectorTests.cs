@@ -32,7 +32,7 @@ public class ArrivalCollectorTests : IDisposable
 
         var collector = new ArrivalCollector(
             _fleet, _observer, context, Options.Create(new CollectionOptions { BatchSize = 2 }),
-            NullLogger<ArrivalCollector>.Instance);
+            TimeProvider.System, NullLogger<ArrivalCollector>.Instance);
 
         return await collector.CollectOnceAsync(stops, CancellationToken.None);
     }
@@ -101,6 +101,28 @@ public class ArrivalCollectorTests : IDisposable
     }
 
     [Fact]
+    public async Task ItSkipsTheBusesTheFeedGivesNoPositionFor()
+    {
+        _fleet.Carries(
+            new CarrisVehicle { Id = "|undefined" },
+            new CarrisVehicle { Id = "41|300", Lat = null, Lon = null },
+            new CarrisVehicle
+            {
+                Id = "42|2548",
+                Lat = 38.8,
+                Lon = -9.2,
+                TripId = "[X]2769_0_1",
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            });
+
+        var report = await CollectAsync("A");
+
+        Assert.Equal(0, report.StopsFailed);
+        Assert.Single(_observer.Fleet);
+        Assert.Equal("42|2548", _observer.Fleet[0].Id);
+    }
+
+    [Fact]
     public async Task ItSurvivesTheFleetBeingUnreachable()
     {
         _fleet.Break();
@@ -121,22 +143,31 @@ public class ArrivalCollectorTests : IDisposable
     {
         private IReadOnlyList<ArrivalObservation> _passages = [];
 
+        public IReadOnlyList<Vehicle> Fleet { get; private set; } = [];
+
         public void Saw(params ArrivalObservation[] passages) => _passages = passages;
 
         public Task<IReadOnlyList<ArrivalObservation>> ObserveAsync(
-            IReadOnlyList<Vehicle> fleet, IReadOnlySet<string> stopIds, CancellationToken cancellationToken) =>
-            Task.FromResult(_passages);
+            IReadOnlyList<Vehicle> fleet, IReadOnlySet<string> stopIds, CancellationToken cancellationToken)
+        {
+            Fleet = fleet;
+
+            return Task.FromResult(_passages);
+        }
     }
 
     private sealed class StubFleet : ICarrisClient
     {
         private bool _broken;
+        private IReadOnlyList<CarrisVehicle> _buses = [];
 
         public void Break() => _broken = true;
+
+        public void Carries(params CarrisVehicle[] buses) => _buses = buses;
 
         public Task<IReadOnlyList<CarrisVehicle>> GetVehiclesAsync(CancellationToken cancellationToken) =>
             _broken
                 ? Task.FromException<IReadOnlyList<CarrisVehicle>>(new HttpRequestException("no fleet"))
-                : Task.FromResult<IReadOnlyList<CarrisVehicle>>([]);
+                : Task.FromResult(_buses);
     }
 }

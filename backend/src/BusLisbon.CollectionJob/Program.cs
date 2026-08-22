@@ -2,6 +2,7 @@ using BusLisbon.Api.Alerts;
 using BusLisbon.Api.Carris;
 using BusLisbon.Api.Observations;
 using BusLisbon.Api.Reliability;
+using BusLisbon.Api.Schedules;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,6 +21,8 @@ public static class ArrivalCollectionJob
 
         builder.Services.AddSingleton(TimeProvider.System);
         CarrisClient.AddCarrisClient(builder.Services, builder.Configuration);
+        TmlNetworkClient.AddTmlNetwork(builder.Services, builder.Configuration);
+        builder.Services.AddScoped<IPassageObserver, PassageObserver>();
         UpstashKeyValueStore.AddUpstash(builder.Services, builder.Configuration);
         builder.Services.Configure<CollectionOptions>(
             builder.Configuration.GetSection(CollectionOptions.SectionName));
@@ -45,7 +48,7 @@ public static class ArrivalCollectionJob
             var report = await collector.CollectOnceAsync(SampleStops.All, CancellationToken.None);
 
             logger.LogInformation(
-                "Read {StopsRead} of {StopsTotal} stops in {Elapsed}s: {Seen} passages seen, {Written} written, {StopsFailed} stops unavailable",
+                "Watched {StopsRead} of {StopsTotal} stops in {Elapsed}s: {Seen} buses standing at one of them, {Written} written, {StopsFailed} feed failures",
                 report.StopsRead,
                 SampleStops.All.Count,
                 (int)TimeProvider.System.GetElapsedTime(started).TotalSeconds,

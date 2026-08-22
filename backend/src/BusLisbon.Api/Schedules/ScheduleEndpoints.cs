@@ -49,6 +49,49 @@ public static class ScheduleEndpoints
             return Results.Ok(calls.OrderBy(call => call.ScheduledUnix).ToList());
         });
 
+        routes.MapGet("/api/arrivals/by-stop/{stopId}", async (
+            string stopId,
+            PatternCatalogue catalogue,
+            ITmlArrivals arrivals,
+            IOptions<TmlOptions> options,
+            TimeProvider clock,
+            CancellationToken cancellationToken) =>
+        {
+            var zone = TimeZoneInfo.FindSystemTimeZoneById(options.Value.TimeZone);
+            var now = clock.GetUtcNow().ToUnixTimeSeconds();
+            var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), zone).DateTime);
+            var patternIds = await catalogue.PatternIdsForAsync(stopId, cancellationToken);
+            var timetable = new List<ScheduledCall>();
+
+            foreach (var patternId in patternIds)
+            {
+                var pattern = await catalogue.PatternAsync(patternId, cancellationToken);
+
+                if (pattern is null) continue;
+
+                timetable.AddRange(ScheduleReader.CallsAt(pattern, stopId, today, zone));
+            }
+
+            var live = await arrivals.GetApproachingAsync(stopId, now, cancellationToken);
+            var etas = live.Values
+                .Select(trip => new LiveEta(trip.TripId, trip.PatternId, trip.EtaUnix))
+                .ToList();
+
+            var board = StopBoard.Build(timetable, etas, now, BehindWindow, AheadWindow);
+
+            return Results.Ok(board.Select(entry => new
+            {
+                lineId = LineName(entry.LineId),
+                patternId = entry.PatternId,
+                headsign = entry.Headsign,
+                tripId = entry.TripId,
+                scheduledUnix = entry.ScheduledUnix,
+                estimatedUnix = entry.EstimatedUnix,
+                isPast = entry.IsPast,
+                isRealtime = entry.IsRealtime
+            }).ToList());
+        });
+
         routes.MapGet("/api/passages/by-stop/{stopId}", (string stopId, PassageLog passages) =>
         {
             passages.Wanted(stopId);
@@ -65,6 +108,10 @@ public static class ScheduleEndpoints
 
         return routes;
     }
+
+    public static readonly TimeSpan BehindWindow = TimeSpan.FromHours(2);
+
+    public static readonly TimeSpan AheadWindow = TimeSpan.FromHours(2);
 
     public const int DefaultMinutes = 120;
 

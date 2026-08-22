@@ -57,8 +57,11 @@ public static class ScheduleReader
 
             if (departure is null) continue;
 
+            var last = group.Schedule.Count > 0
+                && entry.StopSequence == group.Schedule.Max(s => s.StopSequence);
+
             calls.Add(new ScheduledCall(
-                pattern.LineId, pattern.Id, pattern.Headsign, departure, ToUnix(date, seconds, zone)));
+                pattern.LineId, pattern.Id, pattern.Headsign, departure, ToUnix(date, seconds, zone), last));
         }
 
         return calls;

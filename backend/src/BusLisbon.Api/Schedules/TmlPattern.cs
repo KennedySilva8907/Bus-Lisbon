@@ -46,4 +46,5 @@ public sealed record ScheduledCall(
     string PatternId,
     string Headsign,
     string Departure,
-    long ScheduledUnix);
+    long ScheduledUnix,
+    bool IsLastStop);

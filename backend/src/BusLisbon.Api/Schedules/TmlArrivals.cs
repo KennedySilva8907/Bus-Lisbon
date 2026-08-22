@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -12,7 +11,7 @@ public sealed class TmlArrival
     public string TripId { get; set; } = string.Empty;
 
     [JsonPropertyName("eta_seconds")]
-    public string? EtaSeconds { get; set; }
+    public double? EtaSeconds { get; set; }
 }
 
 public sealed record TripParts(string LineId, string PatternId, string AgencyPatternId);
@@ -66,13 +65,10 @@ public sealed partial class TmlArrivalsClient(HttpClient http) : ITmlArrivals
             var trip = ReadTripId(arrival.TripId);
 
             if (trip is null) continue;
-            if (!long.TryParse(arrival.EtaSeconds, NumberStyles.Integer, CultureInfo.InvariantCulture, out var seconds))
-            {
-                continue;
-            }
+            if (arrival.EtaSeconds is not { } seconds || !double.IsFinite(seconds)) continue;
 
             approaching[arrival.TripId] = new ApproachingTrip(
-                arrival.TripId, trip.AgencyPatternId, trip.LineId, nowUnix + seconds);
+                arrival.TripId, trip.AgencyPatternId, trip.LineId, nowUnix + (long)Math.Round(seconds));
         }
 
         return approaching;

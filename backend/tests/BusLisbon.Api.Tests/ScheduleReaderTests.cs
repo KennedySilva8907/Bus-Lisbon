@@ -52,17 +52,40 @@ public class ScheduleReaderTests
     }
 
     [Fact]
-    public void ReadsTheDepartureOffATripId()
+    public void DropsThePlanOffATripIdAndKeepsTheOperator()
     {
-        Assert.Equal("1835", ScheduleReader.DepartureTag("[0277F][BNA17]2753_0_1|150|3|1835"));
-        Assert.Equal("0700", ScheduleReader.DepartureTag("[Y8LCX][BNA17]2753_0_1|150|5|0700"));
+        Assert.Equal("[BNA17]2753_0_1|150|3|1835", ScheduleReader.TripKey("[0277F][BNA17]2753_0_1|150|3|1835"));
+        Assert.Equal("[BNA17]2753_0_1|150|3|1835", ScheduleReader.TripKey("[Y8LCX][BNA17]2753_0_1|150|3|1835"));
     }
 
     [Fact]
-    public void GivesNothingForATripIdWithNoDeparture()
+    public void ReadsTheTripIdsThatCarryNoDepartureTime()
     {
-        Assert.Equal(string.Empty, ScheduleReader.DepartureTag("2753_0_1"));
-        Assert.Equal(string.Empty, ScheduleReader.DepartureTag("2753_0_1|"));
+        Assert.Equal(
+            "[YA15B]3701_0_1_0500_0529_0_VER_DU",
+            ScheduleReader.TripKey("[Q5VCH][YA15B]3701_0_1_0500_0529_0_VER_DU"));
+
+        Assert.Equal(
+            "[HF16N]M29-2-002-A-U-07h40",
+            ScheduleReader.TripKey("[SBF83][HF16N]M29-2-002-A-U-07h40"));
+    }
+
+    [Fact]
+    public void LeavesATripIdWithNoBracketsAlone()
+    {
+        Assert.Equal("2753_0_1", ScheduleReader.TripKey("2753_0_1"));
+    }
+
+    [Fact]
+    public void KeepsADepartureFromAnOperatorWithNoDepartureTag()
+    {
+        var pattern = Pattern(Group(
+            "07:09:00", "110785", ["[Q5VCH][YA15B]3701_0_1_0500_0529_0_VER_DU"], ["20260821"]));
+
+        var calls = ScheduleReader.CallsAt(pattern, "110785", new DateOnly(2026, 8, 21), Lisbon);
+
+        Assert.Single(calls);
+        Assert.Equal(["[YA15B]3701_0_1_0500_0529_0_VER_DU"], calls[0].TripKeys);
     }
 
     [Fact]
@@ -94,7 +117,8 @@ public class ScheduleReaderTests
         var calls = ScheduleReader.CallsAt(pattern, "110785", new DateOnly(2026, 8, 21), Lisbon);
 
         Assert.Single(calls);
-        Assert.Equal("0700", calls[0].Departure);
+        Assert.Equal(3, calls[0].TripKeys.Count);
+        Assert.Contains("[BNA17]2753_0_1|150|3|0700", calls[0].TripKeys);
     }
 
     [Fact]
@@ -105,27 +129,6 @@ public class ScheduleReaderTests
         Assert.Empty(ScheduleReader.CallsAt(pattern, "999999", new DateOnly(2026, 8, 21), Lisbon));
     }
 
-    [Fact]
-    public void MatchesALiveTripToItsScheduledTime()
-    {
-        var pattern = Pattern(
-            Group("07:13:00", "110622", ["[Y8LCX][BNA17]2753_0_1|150|5|0700"], ["20260821"]),
-            Group("18:35:00", "110622", ["[Y8LCX][BNA17]2753_0_1|150|5|1835"], ["20260821"]));
-
-        var scheduled = ScheduleReader.ScheduledFor(
-            pattern, "110622", "[0277F][BNA17]2753_0_1|150|3|1835", new DateOnly(2026, 8, 21), Lisbon);
-
-        Assert.Equal(ScheduleReader.ToUnix(new DateOnly(2026, 8, 21), (18 * 3600) + (35 * 60), Lisbon), scheduled);
-    }
-
-    [Fact]
-    public void GivesNothingWhenTheTripIsNotInTheTimetable()
-    {
-        var pattern = Pattern(Group("07:13:00", "110622", ["[X]2753_0_1|150|3|0700"], ["20260821"]));
-
-        Assert.Null(ScheduleReader.ScheduledFor(
-            pattern, "110622", "[X]2753_0_1|150|3|2359", new DateOnly(2026, 8, 21), Lisbon));
-    }
 }
 
 public class OperationalDayTests

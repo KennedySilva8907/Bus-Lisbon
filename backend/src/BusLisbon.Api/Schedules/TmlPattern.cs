@@ -45,6 +45,6 @@ public sealed record ScheduledCall(
     string LineId,
     string PatternId,
     string Headsign,
-    string Departure,
+    IReadOnlyList<string> TripKeys,
     long ScheduledUnix,
     bool IsLastStop);

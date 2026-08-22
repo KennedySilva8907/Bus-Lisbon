@@ -11,7 +11,8 @@ public class StopBoardTests
 
     private static ScheduledCall Call(
         string departure = "1835", long secondsAway = 240, bool last = false) =>
-        new("2753", "[BNA17]2753_0_1", "Milharado", departure, Now + secondsAway, last);
+        new("2753", "[BNA17]2753_0_1", "Milharado",
+            [$"[BNA17]2753_0_1|1|3|{departure}"], Now + secondsAway, last);
 
     private static LiveEta Eta(string departure = "1835", long secondsAway = 300) =>
         new($"[0277F][BNA17]2753_0_1|1|3|{departure}", "[BNA17]2753_0_1", "1257", Now + secondsAway);
@@ -91,6 +92,37 @@ public class StopBoardTests
         Assert.False(board[0].IsRealtime);
         Assert.True(board[1].IsRealtime);
         Assert.Equal(Now + 1800, board[1].EffectiveUnix);
+    }
+
+    [Fact]
+    public void MatchesAnEstimateWhoseTripIdCarriesADifferentPlan()
+    {
+        var call = new ScheduledCall(
+            "3701", "[YA15B]3701_0_1", "Cacilhas",
+            ["[YA15B]3701_0_1_0500_0529_0_VER_DU"], Now + 240, false);
+
+        var eta = new LiveEta(
+            "[82YP2][YA15B]3701_0_1_0500_0529_0_VER_DU", "[YA15B]3701_0_1", "2600", Now + 300);
+
+        var board = Build([call], [eta]);
+
+        Assert.Single(board);
+        Assert.True(board[0].IsRealtime);
+        Assert.Equal("2600", board[0].VehicleId);
+    }
+
+    [Fact]
+    public void KeepsADepartureFromAnOperatorNoEstimateCanBeMatchedTo()
+    {
+        var call = new ScheduledCall(
+            "M29", "[HF16N]M29_0_1", "CascaiShopping",
+            ["[HF16N]M29-2-002-A-U-07h40"], Now + 600, false);
+
+        var board = Build([call], []);
+
+        Assert.Single(board);
+        Assert.False(board[0].IsRealtime);
+        Assert.Equal(Now + 600, board[0].EffectiveUnix);
     }
 
     [Fact]

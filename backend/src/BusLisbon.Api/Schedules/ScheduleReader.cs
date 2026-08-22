@@ -40,11 +40,11 @@ public static class ScheduleReader
             local.Hour < OperationalDayStartsAt ? local.AddDays(-1).DateTime : local.DateTime);
     }
 
-    public static string DepartureTag(string tripId)
+    public static string TripKey(string tripId)
     {
-        var cut = tripId.LastIndexOf('|');
+        var cut = tripId.IndexOf(']');
 
-        return cut >= 0 && cut < tripId.Length - 1 ? tripId[(cut + 1)..] : string.Empty;
+        return cut >= 0 ? tripId[(cut + 1)..] : tripId;
     }
 
     public static bool RunsOn(TmlTripGroup group, DateOnly date) =>
@@ -63,39 +63,19 @@ public static class ScheduleReader
 
             if (entry is null || SecondsIntoDay(entry.ArrivalTime) is not { } seconds) continue;
 
-            var departure = group.TripIds.Select(DepartureTag).FirstOrDefault(tag => tag.Length > 0);
-
-            if (departure is null) continue;
-
             var last = group.Schedule.Count > 0
                 && entry.StopSequence == group.Schedule.Max(s => s.StopSequence);
 
             calls.Add(new ScheduledCall(
-                pattern.LineId, pattern.Id, pattern.Headsign, departure, ToUnix(date, seconds, zone), last));
+                pattern.LineId,
+                pattern.Id,
+                pattern.Headsign,
+                [.. group.TripIds.Select(TripKey)],
+                ToUnix(date, seconds, zone),
+                last));
         }
 
         return calls;
     }
 
-    public static long? ScheduledFor(
-        TmlPattern pattern, string stopId, string tripId, DateOnly date, TimeZoneInfo zone)
-    {
-        var tag = DepartureTag(tripId);
-
-        if (tag.Length == 0) return null;
-
-        foreach (var group in pattern.Trips)
-        {
-            if (!RunsOn(group, date)) continue;
-            if (!group.TripIds.Any(id => DepartureTag(id) == tag)) continue;
-
-            var entry = group.Schedule.FirstOrDefault(s => s.StopId == stopId);
-
-            if (entry is null || SecondsIntoDay(entry.ArrivalTime) is not { } seconds) continue;
-
-            return ToUnix(date, seconds, zone);
-        }
-
-        return null;
-    }
 }

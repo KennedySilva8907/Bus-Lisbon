@@ -23,11 +23,11 @@ public static class StopBoard
         TimeSpan behind,
         TimeSpan ahead)
     {
-        var byDeparture = new Dictionary<string, LiveEta>();
+        var byTrip = new Dictionary<string, LiveEta>();
 
         foreach (var eta in etas)
         {
-            byDeparture[Key(eta.PatternId, ScheduleReader.DepartureTag(eta.TripId))] = eta;
+            byTrip[ScheduleReader.TripKey(eta.TripId)] = eta;
         }
 
         var board = new List<BoardEntry>();
@@ -36,8 +36,7 @@ public static class StopBoard
         {
             if (call.IsLastStop) continue;
 
-            byDeparture.TryGetValue(Key(call.PatternId, call.Departure), out var eta);
-
+            var eta = Matching(byTrip, call.TripKeys);
             var estimated = eta?.EstimatedUnix ?? 0;
             var effective = estimated != 0 ? estimated : call.ScheduledUnix;
 
@@ -60,5 +59,14 @@ public static class StopBoard
         return [.. board.OrderBy(entry => entry.EffectiveUnix)];
     }
 
-    private static string Key(string patternId, string departure) => $"{patternId}|{departure}";
+    private static LiveEta? Matching(
+        IReadOnlyDictionary<string, LiveEta> byTrip, IReadOnlyList<string> tripKeys)
+    {
+        foreach (var key in tripKeys)
+        {
+            if (byTrip.TryGetValue(key, out var eta)) return eta;
+        }
+
+        return null;
+    }
 }

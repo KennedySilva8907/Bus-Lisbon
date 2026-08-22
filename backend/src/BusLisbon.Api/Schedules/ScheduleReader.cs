@@ -50,6 +50,28 @@ public static class ScheduleReader
     public static bool RunsOn(TmlTripGroup group, DateOnly date) =>
         group.ValidOn.Contains(date.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
 
+    public static long? ScheduledFor(
+        TmlPattern pattern, string stopId, string tripId, DateOnly date, TimeZoneInfo zone)
+    {
+        var wanted = Vehicles.VehicleMatcher.BareTripId(tripId);
+
+        if (wanted.Length == 0) return null;
+
+        foreach (var group in pattern.Trips)
+        {
+            if (!RunsOn(group, date)) continue;
+            if (!group.TripIds.Any(id => Vehicles.VehicleMatcher.BareTripId(id) == wanted)) continue;
+
+            var entry = group.Schedule.FirstOrDefault(stop => stop.StopId == stopId);
+
+            if (entry is null || SecondsIntoDay(entry.ArrivalTime) is not { } seconds) continue;
+
+            return ToUnix(date, seconds, zone);
+        }
+
+        return null;
+    }
+
     public static IReadOnlyList<ScheduledCall> CallsAt(
         TmlPattern pattern, string stopId, DateOnly date, TimeZoneInfo zone)
     {

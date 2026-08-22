@@ -11,6 +11,7 @@ public sealed class ArrivalCollector(
     IPassageObserver observer,
     ObservationsContext database,
     IOptions<CollectionOptions> options,
+    TimeProvider clock,
     ILogger<ArrivalCollector> logger)
 {
     public async Task<CollectionReport> CollectOnceAsync(
@@ -20,7 +21,14 @@ public sealed class ArrivalCollector(
 
         try
         {
-            buses = [.. (await fleet.GetVehiclesAsync(cancellationToken)).Select(Vehicles.Vehicle.From)];
+            var now = clock.GetUtcNow();
+
+            buses =
+            [
+                .. (await fleet.GetVehiclesAsync(cancellationToken))
+                    .Where(bus => VehicleFilter.IsLive(bus, now))
+                    .Select(Vehicles.Vehicle.From)
+            ];
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

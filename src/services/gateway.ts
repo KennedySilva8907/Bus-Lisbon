@@ -44,6 +44,22 @@ export function isFleetVehicleId(vehicleId: string | null | undefined): boolean 
   return typeof vehicleId === 'string' && /^\d+\|\d+$/.test(vehicleId);
 }
 
+export interface StreamSubscription {
+  vehicleId: string | null;
+  lineId: string | null;
+}
+
+export function streamSubscriptionFor(
+  vehicleId: string | null,
+  lineId: string | null | undefined,
+  tripId?: string | null
+): StreamSubscription {
+  if (isFleetVehicleId(vehicleId)) return { vehicleId, lineId: null };
+  if (tripId) return { vehicleId: null, lineId: null };
+
+  return { vehicleId: null, lineId: lineId ?? null };
+}
+
 export function gatewayVehicleUrl(
   base: string,
   vehicleId: string | null,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { gatewayVehicleUrl, isFleetVehicleId, toVehicle, type GatewayVehicleResponse } from './gateway';
+import { gatewayVehicleUrl, isFleetVehicleId, streamSubscriptionFor, toVehicle, type GatewayVehicleResponse } from './gateway';
 
 const payload: GatewayVehicleResponse = {
   vehicle: {
@@ -102,5 +102,26 @@ describe('gatewayVehicleUrl with an arrivals-feed id', () => {
   it('still goes straight to the vehicle when the id is a fleet one', () => {
     expect(gatewayVehicleUrl('https://api.example', '42|2512', '2769', '2769_0_1'))
       .toBe('https://api.example/api/vehicles/42%7C2512');
+  });
+});
+
+describe('streamSubscriptionFor', () => {
+  it('follows a fleet vehicle by its own id', () => {
+    expect(streamSubscriptionFor('42|2524', '2812', '[0277F][BNA17]2812_0_2|2|3|1200'))
+      .toEqual({ vehicleId: '42|2524', lineId: null });
+  });
+
+  it('subscribes to nothing when the trip is known but the id is not the fleet one', () => {
+    expect(streamSubscriptionFor('2608', '2812', '[0277F][BNA17]2812_0_2|2|3|1200'))
+      .toEqual({ vehicleId: null, lineId: null });
+  });
+
+  it('falls back to the line only when there is no trip to go on', () => {
+    expect(streamSubscriptionFor('2608', '2812', null))
+      .toEqual({ vehicleId: null, lineId: '2812' });
+  });
+
+  it('subscribes to nothing when nothing is selected', () => {
+    expect(streamSubscriptionFor(null, null, null)).toEqual({ vehicleId: null, lineId: null });
   });
 });

@@ -125,3 +125,14 @@ describe('streamSubscriptionFor', () => {
     expect(streamSubscriptionFor(null, null, null)).toEqual({ vehicleId: null, lineId: null });
   });
 });
+
+describe('gatewayVehicleUrl with nothing selected', () => {
+  it('asks for nothing when only a leftover trip id remains', () => {
+    expect(gatewayVehicleUrl('https://api.example', null, null, null, '[0277F][BNA17]2812_0_2|2|3|1200'))
+      .toBeNull();
+  });
+
+  it('asks for nothing when everything is empty', () => {
+    expect(gatewayVehicleUrl('https://api.example', null, null, null, null)).toBeNull();
+  });
+});

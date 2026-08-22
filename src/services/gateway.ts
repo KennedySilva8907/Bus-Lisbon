@@ -67,6 +67,8 @@ export function gatewayVehicleUrl(
   patternId: string | null | undefined,
   tripId?: string | null
 ): string | null {
+  if (!vehicleId && !lineId) return null;
+
   if (isFleetVehicleId(vehicleId)) return `${base}/api/vehicles/${encodeURIComponent(vehicleId as string)}`;
 
   if (tripId) {

@@ -122,11 +122,16 @@ function App() {
   };
 
   // Called when a stop is selected via Map or Search
-  const handleStopSelect = (stop: Stop) => {
-    setSelectedStop(stop);
+  const stopFollowing = () => {
     setSelectedVehicleId(null);
     setSelectedPatternId(null);
     setSelectedLineId(null);
+    setSelectedTripId(null);
+  };
+
+  const handleStopSelect = (stop: Stop) => {
+    setSelectedStop(stop);
+    stopFollowing();
     setIsPanelExpanded(true);
   };
 
@@ -164,7 +169,7 @@ function App() {
           stop={selectedStop}
           isExpanded={isPanelExpanded}
           onToggleExpand={() => setIsPanelExpanded(!isPanelExpanded)}
-          onClose={() => { setSelectedStop(null); setSelectedVehicleId(null); setSelectedPatternId(null); setSelectedLineId(null); }}
+          onClose={() => { setSelectedStop(null); stopFollowing(); }}
           selectedVehicleId={selectedVehicleId}
           onVehicleSelect={(vid, pid, lid, tid) => { setSelectedVehicleId(vid); setSelectedPatternId(pid || null); setSelectedLineId(lid || null); setSelectedTripId(tid || null); }}
           isFavorite={selectedStop ? isFavorite(selectedStop.id) : false}

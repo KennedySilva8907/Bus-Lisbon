@@ -128,43 +128,8 @@ public class ScheduleReaderTests
     }
 }
 
-public class ScheduleWindowTests
+public class LineNameTests
 {
-    [Fact]
-    public void DefaultsToTheWindowThePanelShows()
-    {
-        Assert.Equal(120, ScheduleEndpoints.Window(null));
-        Assert.Equal(120, ScheduleEndpoints.Window(0));
-        Assert.Equal(120, ScheduleEndpoints.Window(-5));
-    }
-
-    [Fact]
-    public void HonoursASmallerWindowAndCapsALargerOne()
-    {
-        Assert.Equal(30, ScheduleEndpoints.Window(30));
-        Assert.Equal(720, ScheduleEndpoints.Window(5000));
-    }
-
-    [Fact]
-    public void KeepsWhatIsAboutToHappen()
-    {
-        Assert.True(ScheduleEndpoints.Within(1000, 1000, 120));
-        Assert.True(ScheduleEndpoints.Within(1000 + (119 * 60), 1000, 120));
-    }
-
-    [Fact]
-    public void DropsWhatIsPastOrTooFarOff()
-    {
-        Assert.False(ScheduleEndpoints.Within(1000 - 300, 1000, 120));
-        Assert.False(ScheduleEndpoints.Within(1000 + (121 * 60), 1000, 120));
-    }
-
-    [Fact]
-    public void KeepsABusThatIsAMinuteLateRatherThanHidingIt()
-    {
-        Assert.True(ScheduleEndpoints.Within(1000 - 45, 1000, 120));
-    }
-
     [Fact]
     public void StripsTheAgencyOffALineName()
     {

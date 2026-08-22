@@ -19,6 +19,8 @@ public sealed class TmlArrival
 
 public sealed record TripParts(string LineId, string PatternId, string AgencyPatternId);
 
+public sealed record ApproachingTrip(string TripId, string PatternId, string LineId, string VehicleId, long EtaUnix);
+
 public interface ITmlArrivals
 {
     Task<Dictionary<string, ApproachingTrip>> GetApproachingAsync(

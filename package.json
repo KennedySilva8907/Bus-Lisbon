@@ -35,7 +35,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "check:api": "node scripts/api-contract-check.mjs"
+    "check:api": "node scripts/api-contract-check.mjs",
+    "check:shape": "node scripts/api-shape.mjs",
+    "record:api": "node scripts/api-shape.mjs --record"
   },
   "dependencies": {
     "@microsoft/signalr": "^10.0.11",

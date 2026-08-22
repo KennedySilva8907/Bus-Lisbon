@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using BusLisbon.Api.Alerts;
+using BusLisbon.Api.Endpoints;
 using BusLisbon.Api.Carris;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -33,13 +34,60 @@ public class AlertEndpointsTests : IClassFixture<AlertApiFactory>
             thresholdMinutes
         };
 
+    private static int _caller;
+
+    private static HttpClient FromItsOwnAddress(HttpClient client)
+    {
+        client.DefaultRequestHeaders.Remove("X-Forwarded-For");
+        client.DefaultRequestHeaders.Add("X-Forwarded-For", $"203.0.113.{Interlocked.Increment(ref _caller) % 250}");
+
+        return client;
+    }
+
     private async Task<Alert> CreateAsync(HttpClient client, object body)
     {
-        var response = await client.PostAsJsonAsync("/api/alerts", body);
+        var response = await FromItsOwnAddress(client).PostAsJsonAsync("/api/alerts", body);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         return (await response.Content.ReadFromJsonAsync<Alert>())!;
+    }
+
+    [Fact]
+    public async Task Creating_StopsAfterEnoughTriesFromOneAddress()
+    {
+        var client = _factory.WithFreshStore().CreateClient();
+        client.DefaultRequestHeaders.Add("X-Forwarded-For", "198.51.100.99");
+
+        var codes = new List<HttpStatusCode>();
+
+        for (var i = 0; i < AlertEndpoints.WritesPerWindow + 3; i++)
+        {
+            var response = await client.PostAsJsonAsync(
+                "/api/alerts", Body(endpoint: $"https://push.example/flood-{i}"));
+
+            codes.Add(response.StatusCode);
+        }
+
+        Assert.Equal(AlertEndpoints.WritesPerWindow, codes.Count(code => code == HttpStatusCode.Created));
+        Assert.Equal(3, codes.Count(code => code == HttpStatusCode.TooManyRequests));
+    }
+
+    [Fact]
+    public async Task Creating_CountsEachAddressOnItsOwn()
+    {
+        var factory = _factory.WithFreshStore();
+
+        for (var i = 0; i < AlertEndpoints.WritesPerWindow + 2; i++)
+        {
+            var client = factory.CreateClient();
+            client.DefaultRequestHeaders.Add("X-Forwarded-For", $"192.0.2.{i}");
+
+            var response = await client.PostAsJsonAsync(
+                "/api/alerts", Body(endpoint: $"https://push.example/spread-{i}"));
+
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        }
     }
 
     [Fact]

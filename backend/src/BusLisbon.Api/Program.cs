@@ -24,12 +24,14 @@ builder.Services.Configure<AlertOptions>(builder.Configuration.GetSection(AlertO
 builder.Services.Configure<DiagnosticsOptions>(builder.Configuration.GetSection(DiagnosticsOptions.SectionName));
 UpstashKeyValueStore.AddUpstash(builder.Services, builder.Configuration);
 builder.Services.AddScoped<AlertStore>();
+builder.Services.AddAlertRateLimit();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<CarrisPoller>();
 
 var app = builder.Build();
 
 app.UseCors();
+app.UseRateLimiter();
 
 app.MapHealthEndpoints();
 app.MapVehicleEndpoints();

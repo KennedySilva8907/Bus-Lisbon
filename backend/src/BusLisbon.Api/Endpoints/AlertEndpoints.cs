@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using BusLisbon.Api.Alerts;
 
 namespace BusLisbon.Api.Endpoints;
@@ -16,9 +17,30 @@ public static class AlertEndpoints
     private const int MinThresholdMinutes = 1;
     private const int MaxThresholdMinutes = 60;
 
+    public const string WritePolicy = "alert-writes";
+
+    public static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
+
+    public const int WritesPerWindow = 20;
+
+    public static IServiceCollection AddAlertRateLimit(this IServiceCollection services) =>
+        services.AddRateLimiter(limiter =>
+        {
+            limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+            limiter.AddPolicy(WritePolicy, context => RateLimitPartition.GetFixedWindowLimiter(
+                CallerOf(context),
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = WritesPerWindow, Window = Window }));
+        });
+
+    public static string CallerOf(HttpContext context) =>
+        context.Request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[0].Trim()
+            ?? context.Connection.RemoteIpAddress?.ToString()
+            ?? "unknown";
+
     public static IEndpointRouteBuilder MapAlertEndpoints(this IEndpointRouteBuilder app)
     {
-        var alerts = app.MapGroup("/api/alerts");
+        var alerts = app.MapGroup("/api/alerts").RequireRateLimiting(WritePolicy);
 
         alerts.MapPost("/", async (
             CreateAlertRequest request,

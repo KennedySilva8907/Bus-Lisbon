@@ -40,7 +40,7 @@ public static class AlertEndpoints
 
     public static IEndpointRouteBuilder MapAlertEndpoints(this IEndpointRouteBuilder app)
     {
-        var alerts = app.MapGroup("/api/alerts").RequireRateLimiting(WritePolicy);
+        var alerts = app.MapGroup("/api/alerts");
 
         alerts.MapPost("/", async (
             CreateAlertRequest request,
@@ -83,7 +83,7 @@ public static class AlertEndpoints
             await store.AddAsync(alert, subscription, cancellationToken);
 
             return Results.Created($"/api/alerts/{alert.Id}", alert);
-        });
+        }).RequireRateLimiting(WritePolicy);
 
         alerts.MapGet("/", async (
             string? endpoint,

@@ -74,6 +74,40 @@ public class AlertEndpointsTests : IClassFixture<AlertApiFactory>
     }
 
     [Fact]
+    public async Task Cancelling_IsNotRefusedAfterAFloodOfCreations()
+    {
+        var factory = _factory.WithFreshStore();
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Forwarded-For", "198.51.100.42");
+
+        var created = new List<Alert>();
+
+        for (var i = 0; i < AlertEndpoints.WritesPerWindow; i++)
+        {
+            var response = await client.PostAsJsonAsync(
+                "/api/alerts", Body(endpoint: $"https://push.example/cancel-{i}"));
+
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            created.Add((await response.Content.ReadFromJsonAsync<Alert>())!);
+        }
+
+        Assert.Equal(
+            HttpStatusCode.TooManyRequests,
+            (await client.PostAsJsonAsync("/api/alerts", Body(endpoint: "https://push.example/one-too-many"))).StatusCode);
+
+        foreach (var alert in created)
+        {
+            var gone = await client.DeleteAsync($"/api/alerts/{alert.Id}?endpoint={Uri.EscapeDataString(alert.Endpoint)}");
+
+            Assert.Equal(HttpStatusCode.NoContent, gone.StatusCode);
+        }
+
+        var listed = await client.GetAsync($"/api/alerts?endpoint={Uri.EscapeDataString(created[0].Endpoint)}");
+
+        Assert.Equal(HttpStatusCode.OK, listed.StatusCode);
+    }
+
+    [Fact]
     public async Task Creating_CountsEachAddressOnItsOwn()
     {
         var factory = _factory.WithFreshStore();

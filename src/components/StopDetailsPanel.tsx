@@ -78,7 +78,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
         // Tightened from -120s to -60s: the bus has either arrived or its
         // prediction is stale enough that the user is better off seeing the
         // next one.
-        if (time < nowUnix - 60) return false;
+        if (time < nowUnix - 60 && !eta.trip_running) return false;
         return time < nowUnix + 7200;
       })
       .sort((a, b) => {
@@ -382,7 +382,9 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                   }
 
                   let displayTime: string;
-                  if (diffSec <= 30) {
+                  if (diffSec < -60) {
+                    displayTime = 'Atrasado';
+                  } else if (diffSec <= 30) {
                     displayTime = 'Agora';
                   } else if (diffMinutes <= 0) {
                     // Same clock minute as "now" but still 31–59s away

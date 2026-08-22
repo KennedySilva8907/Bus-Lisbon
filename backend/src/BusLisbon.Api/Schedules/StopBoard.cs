@@ -23,7 +23,7 @@ public static class StopBoard
         long nowUnix,
         TimeSpan behind,
         TimeSpan ahead,
-        IReadOnlyDictionary<string, string>? fleetByTrip = null)
+        IReadOnlyDictionary<string, Vehicles.RunningBus>? fleetByTrip = null)
     {
         var byTrip = new Dictionary<string, LiveEta>();
 
@@ -46,17 +46,18 @@ public static class StopBoard
             if (effective > nowUnix + (long)ahead.TotalSeconds) continue;
 
             var running = OnTheRoad(fleetByTrip, call.TripKeys);
+            var gone = effective < nowUnix && !StillShortOf(call, running);
 
             board.Add(new BoardEntry(
                 call.LineId,
                 call.PatternId,
                 call.Headsign,
                 eta?.TripId ?? call.TripKeys.FirstOrDefault() ?? string.Empty,
-                eta?.VehicleId ?? running ?? string.Empty,
+                eta?.VehicleId ?? running?.VehicleId ?? string.Empty,
                 call.ScheduledUnix,
                 estimated,
                 effective,
-                effective < nowUnix,
+                gone,
                 estimated != 0,
                 eta is not null || running is not null));
         }
@@ -64,20 +65,26 @@ public static class StopBoard
         return [.. board.OrderBy(entry => entry.EffectiveUnix)];
     }
 
-    private static string? OnTheRoad(
-        IReadOnlyDictionary<string, string>? fleetByTrip, IReadOnlyList<string> tripKeys)
+    private static Vehicles.RunningBus? OnTheRoad(
+        IReadOnlyDictionary<string, Vehicles.RunningBus>? fleetByTrip, IReadOnlyList<string> tripKeys)
     {
         if (fleetByTrip is null) return null;
 
         foreach (var key in tripKeys)
         {
-            if (fleetByTrip.TryGetValue(Vehicles.VehicleMatcher.BareTripId(key), out var vehicleId))
-            {
-                return vehicleId;
-            }
+            if (fleetByTrip.TryGetValue(Vehicles.VehicleMatcher.BareTripId(key), out var bus)) return bus;
         }
 
         return null;
+    }
+
+    public static bool StillShortOf(ScheduledCall call, Vehicles.RunningBus? bus)
+    {
+        if (bus?.AtStopId is not { } atStopId) return false;
+
+        var at = call.Schedule.FirstOrDefault(stop => stop.StopId == atStopId);
+
+        return at is not null && at.StopSequence < call.StopSequence;
     }
 
     private static LiveEta? Matching(

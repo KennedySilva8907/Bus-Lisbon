@@ -72,7 +72,9 @@ public static class ScheduleReader
                 pattern.Headsign,
                 [.. group.TripIds.Select(TripKey)],
                 ToUnix(date, seconds, zone),
-                last));
+                last,
+                entry.StopSequence,
+                group.Schedule));
         }
 
         return calls;

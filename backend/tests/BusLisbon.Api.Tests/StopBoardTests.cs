@@ -1,4 +1,5 @@
 using BusLisbon.Api.Schedules;
+using BusLisbon.Api.Vehicles;
 
 namespace BusLisbon.Api.Tests;
 
@@ -9,10 +10,17 @@ public class StopBoardTests
     private static readonly TimeSpan Behind = TimeSpan.FromHours(2);
     private static readonly TimeSpan Ahead = TimeSpan.FromHours(2);
 
+    private static readonly TmlScheduleEntry[] AlongTheRoute =
+    [
+        new() { ArrivalTime = "18:20:00", StopId = "110001", StopSequence = 1 },
+        new() { ArrivalTime = "18:30:00", StopId = "110785", StopSequence = 5 },
+        new() { ArrivalTime = "18:40:00", StopId = "110999", StopSequence = 9 },
+    ];
+
     private static ScheduledCall Call(
         string departure = "1835", long secondsAway = 240, bool last = false) =>
         new("2753", "[BNA17]2753_0_1", "Milharado",
-            [$"[BNA17]2753_0_1|1|3|{departure}"], Now + secondsAway, last);
+            [$"[BNA17]2753_0_1|1|3|{departure}"], Now + secondsAway, last, 5, AlongTheRoute);
 
     private static LiveEta Eta(string departure = "1835", long secondsAway = 300) =>
         new($"[0277F][BNA17]2753_0_1|1|3|{departure}", "[BNA17]2753_0_1", "1257", Now + secondsAway);
@@ -99,7 +107,7 @@ public class StopBoardTests
     {
         var call = new ScheduledCall(
             "3701", "[YA15B]3701_0_1", "Cacilhas",
-            ["[YA15B]3701_0_1_0500_0529_0_VER_DU"], Now + 240, false);
+            ["[YA15B]3701_0_1_0500_0529_0_VER_DU"], Now + 240, false, 5, AlongTheRoute);
 
         var eta = new LiveEta(
             "[82YP2][YA15B]3701_0_1_0500_0529_0_VER_DU", "[YA15B]3701_0_1", "2600", Now + 300);
@@ -116,7 +124,7 @@ public class StopBoardTests
     {
         var call = new ScheduledCall(
             "M29", "[HF16N]M29_0_1", "CascaiShopping",
-            ["[HF16N]M29-2-002-A-U-07h40"], Now + 600, false);
+            ["[HF16N]M29-2-002-A-U-07h40"], Now + 600, false, 5, AlongTheRoute);
 
         var board = Build([call], []);
 
@@ -145,5 +153,58 @@ public class StopBoardTests
     public void AnEmptyStopGivesAnEmptyBoard()
     {
         Assert.Empty(Build([], []));
+    }
+
+    [Fact]
+    public void ADepartureIsNotGoneWhileItsBusIsStillShortOfTheStop()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["2753_0_1|1|3|1835"] = new("42|2524", "110001")
+        };
+
+        var board = StopBoard.Build([Call(secondsAway: -900)], [], Now, Behind, Ahead, fleet);
+
+        Assert.Single(board);
+        Assert.False(board[0].IsPast);
+        Assert.True(board[0].TripRunning);
+    }
+
+    [Fact]
+    public void ADepartureIsGoneOnceItsBusIsFurtherAlongTheRoute()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["2753_0_1|1|3|1835"] = new("42|2524", "110999")
+        };
+
+        var board = StopBoard.Build([Call(secondsAway: -900)], [], Now, Behind, Ahead, fleet);
+
+        Assert.Single(board);
+        Assert.True(board[0].IsPast);
+    }
+
+    [Fact]
+    public void ADepartureWithNoBusOnTheRoadGoesByTheTimetable()
+    {
+        var board = StopBoard.Build([Call(secondsAway: -900)], [], Now, Behind, Ahead, new Dictionary<string, RunningBus>());
+
+        Assert.Single(board);
+        Assert.True(board[0].IsPast);
+        Assert.False(board[0].TripRunning);
+    }
+
+    [Fact]
+    public void ABusAtAStopTheTripDoesNotServeSaysNothingAboutOurs()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["2753_0_1|1|3|1835"] = new("42|2524", "999999")
+        };
+
+        var board = StopBoard.Build([Call(secondsAway: -900)], [], Now, Behind, Ahead, fleet);
+
+        Assert.Single(board);
+        Assert.True(board[0].IsPast);
     }
 }

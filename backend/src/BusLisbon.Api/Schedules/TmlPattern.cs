@@ -47,4 +47,6 @@ public sealed record ScheduledCall(
     string Headsign,
     IReadOnlyList<string> TripKeys,
     long ScheduledUnix,
-    bool IsLastStop);
+    bool IsLastStop,
+    int StopSequence,
+    IReadOnlyList<TmlScheduleEntry> Schedule);

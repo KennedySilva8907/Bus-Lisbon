@@ -5,6 +5,8 @@ namespace BusLisbon.Api.Vehicles;
 
 public sealed record VehicleGatewayStatus(int LiveVehicles, double? AgeSeconds, bool Stale);
 
+public sealed record RunningBus(string VehicleId, string? AtStopId);
+
 public sealed class VehicleGateway(
     ICarrisClient client,
     TimeProvider time,
@@ -41,21 +43,26 @@ public sealed class VehicleGateway(
         return snapshot is null ? null : VehicleMatcher.Find(snapshot.All, tripId, number, lineId);
     }
 
-    public async Task<IReadOnlyDictionary<string, string>> GetVehiclesByTripAsync(
+    public async Task<IReadOnlyDictionary<string, RunningBus>> GetVehiclesByTripAsync(
         CancellationToken cancellationToken)
     {
         var snapshot = await EnsureFreshAsync(cancellationToken);
-        var byTrip = new Dictionary<string, string>();
+        var byTrip = new Dictionary<string, RunningBus>();
 
         foreach (var vehicle in snapshot?.All ?? [])
         {
             var trip = VehicleMatcher.BareTripId(vehicle.TripId);
 
-            if (trip.Length > 0) byTrip[trip] = vehicle.Id;
+            if (trip.Length > 0) byTrip[trip] = new RunningBus(vehicle.Id, NetworkStopOf(vehicle));
         }
 
         return byTrip;
     }
+
+    private static string? NetworkStopOf(Vehicle vehicle) =>
+        string.IsNullOrEmpty(vehicle.StopId)
+            ? null
+            : Schedules.StopIdMap.NetworkIdFor(vehicle.StopId) ?? vehicle.StopId;
 
     public async Task<VehicleGatewayStatus> GetStatusAsync(CancellationToken cancellationToken)
     {

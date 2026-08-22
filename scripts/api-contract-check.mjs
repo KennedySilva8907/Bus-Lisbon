@@ -18,7 +18,7 @@ import { readFile } from 'node:fs/promises';
 
 const STOP_ID_MAP = new URL('../backend/src/BusLisbon.Api/Schedules/stop-id-map.json', import.meta.url);
 const BASE = 'https://api.carrismetropolitana.pt';
-const HUB = 'https://go.tmlmobilidade.pt/hub/api/v9';
+const HUB = 'https://go.tmlmobilidade.pt/hub/api/v1';
 const FRESH_WINDOW_SEC = 180;
 const ARRIVAL_SAMPLE = 12;
 

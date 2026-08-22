@@ -11,7 +11,8 @@ public sealed record Vehicle(
     string? TripId,
     double? Bearing,
     double? Speed,
-    long? Timestamp)
+    long? Timestamp,
+    string? StopId = null)
 {
     public static Vehicle From(CarrisVehicle vehicle) => new(
         vehicle.Id!,
@@ -22,5 +23,6 @@ public sealed record Vehicle(
         vehicle.TripId,
         vehicle.Bearing,
         vehicle.Speed,
-        vehicle.Timestamp);
+        vehicle.Timestamp,
+        vehicle.StopId);
 }

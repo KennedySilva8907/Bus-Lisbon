@@ -274,7 +274,7 @@ function paintRoute(map: MapLibreMap, before?: string) {
   }, before);
 }
 
-function paintStops(map: MapLibreMap, isDarkMap: boolean, before?: string) {
+function paintStops(map: MapLibreMap, isDarkMap: boolean) {
   if (map.getLayer(STOPS_LAYER)) return;
 
   map.addLayer({
@@ -288,7 +288,7 @@ function paintStops(map: MapLibreMap, isDarkMap: boolean, before?: string) {
       'circle-stroke-width': stopStrokeWidth as never,
       'circle-stroke-color': isDarkMap ? '#0d1117' : '#1A1A1A',
     },
-  }, before);
+  });
 
   map.addLayer({
     id: WAYPOINTS_LAYER,
@@ -300,7 +300,7 @@ function paintStops(map: MapLibreMap, isDarkMap: boolean, before?: string) {
       'circle-stroke-width': waypointStrokeWidth as never,
       'circle-stroke-color': '#E53935',
     },
-  }, before);
+  });
 
   map.addLayer({
     id: SELECTED_DOT_LAYER,
@@ -634,7 +634,7 @@ export default function VectorMap({
       const before = firstLabelLayer(instance);
 
       paintRoute(instance, before);
-      paintStops(instance, dark.current, before);
+      paintStops(instance, dark.current);
       paintUserLocation(instance);
       paintVehicle(instance);
 

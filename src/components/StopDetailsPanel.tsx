@@ -1,5 +1,5 @@
 import { useStopETA, type Stop, type ETA } from '../services/api';
-import { describeArrival } from '../services/arrivals';
+import { describeArrival, describePassage, describePunctuality, wentByAt, type PunctualityTone } from '../services/arrivals';
 import { fromUnixTime } from 'date-fns';
 import { X, Star, ChevronUp } from 'lucide-react';
 import { useRef, useEffect, useState, useMemo } from 'react';
@@ -10,13 +10,29 @@ import FavouriteLineStar from './FavouriteLineStar';
 import AlertSetupModal from './AlertSetupModal';
 import { PANEL_ELEMENT_ID } from '../services/framing';
 
+const PunctualityColour: Record<PunctualityTone, string> = {
+  early: 'text-blue-400',
+  late: 'text-orange-400',
+  onTime: 'text-green-400',
+  running: 'text-carris-yellow',
+  finished: 'text-gray-400',
+};
+
+const PunctualityBackground: Record<PunctualityTone, string> = {
+  early: 'bg-blue-400/10',
+  late: 'bg-orange-400/10',
+  onTime: 'bg-green-400/10',
+  running: 'bg-carris-yellow/10',
+  finished: 'bg-gray-400/10',
+};
+
 interface StopDetailsPanelProps {
   stop: Stop | null;
   onClose: () => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
   selectedVehicleId?: string | null;
-  onVehicleSelect?: (vehicleId: string | null, patternId?: string, lineId?: string) => void;
+  onVehicleSelect?: (vehicleId: string | null, patternId?: string, lineId?: string, tripId?: string) => void;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
 }
@@ -52,17 +68,17 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
   // Split into past and future arrivals (memoized to avoid re-renders)
   const { pastEtas, futureEtas, recentPast, olderPast } = useMemo(() => {
     const past = [...etas]
-      .filter(eta => eta.observed_arrival_unix != null && eta.observed_arrival_unix < nowUnix)
-      .sort((a, b) => ((b.observed_arrival_unix ?? 0) - (a.observed_arrival_unix ?? 0)));
+      .filter(eta => (wentByAt(eta) ?? Infinity) < nowUnix)
+      .sort((a, b) => ((wentByAt(b) ?? 0) - (wentByAt(a) ?? 0)));
 
     const future = [...etas]
       .filter(eta => {
-        if (eta.observed_arrival_unix != null && eta.observed_arrival_unix < nowUnix) return false;
+        if ((wentByAt(eta) ?? Infinity) < nowUnix) return false;
         const time = eta.estimated_arrival_unix || eta.scheduled_arrival_unix;
         // Tightened from -120s to -60s: the bus has either arrived or its
         // prediction is stale enough that the user is better off seeing the
         // next one.
-        if (time < nowUnix - 60) return false;
+        if (time < nowUnix - 60 && !eta.trip_running) return false;
         return time < nowUnix + 7200;
       })
       .sort((a, b) => {
@@ -239,14 +255,12 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                   {showAllPast && olderPast.length > 0 && (
                     <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-1.5">
                       {olderPast.map((eta, i) => {
-                        const pastMin = Math.round((nowUnix - (eta.observed_arrival_unix ?? 0)) / 60);
-                        const delaySec = (eta.observed_arrival_unix ?? 0) - eta.scheduled_arrival_unix;
-                        let directionLabel = '';
-                        let directionColor = 'text-gray-400';
-                        let directionBg = 'bg-gray-400/10';
-                        if (delaySec < -60) { directionLabel = 'Adiantado'; directionColor = 'text-blue-400'; directionBg = 'bg-blue-400/10'; }
-                        else if (delaySec > 120) { directionLabel = `+${Math.round(delaySec / 60)}min`; directionColor = 'text-orange-400'; directionBg = 'bg-orange-400/10'; }
-                        else { directionLabel = 'Pontual'; directionColor = 'text-green-400'; directionBg = 'bg-green-400/10'; }
+                        const wentBy = wentByAt(eta) ?? 0;
+                        const pastMin = Math.round((nowUnix - wentBy) / 60);
+                        const punctuality = describePunctuality(eta) ?? describePassage(eta);
+                        const directionLabel = punctuality.label;
+                        const directionColor = PunctualityColour[punctuality.tone];
+                        const directionBg = PunctualityBackground[punctuality.tone];
 
                         const canTrack = !!eta.vehicle_id;
                         const isSelected = canTrack && selectedVehicleId === eta.vehicle_id;
@@ -254,7 +268,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                         return (
                           <div
                             key={`past-old-${eta.vehicle_id || eta.line_id}-${i}`}
-                            onClick={canTrack && onVehicleSelect ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id) : undefined}
+                            onClick={canTrack && onVehicleSelect ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id, eta.trip_id) : undefined}
                             className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
                               isSelected
                                 ? 'bg-carris-yellow/10 border-carris-yellow/40 ring-1 ring-carris-yellow/30 opacity-90'
@@ -276,7 +290,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                             <div className="flex-shrink-0 text-right pl-2">
                               <div className="font-bold text-[15px] leading-tight text-gray-500">Há {pastMin}min</div>
                               <div className="text-[10px] text-gray-500 font-mono leading-tight mt-0.5">
-                                {fromUnixTime((eta.observed_arrival_unix ?? 0)).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                                {fromUnixTime(wentBy).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
                               </div>
                             </div>
                           </div>
@@ -287,14 +301,12 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
 
                   {/* Last 2 recent past arrivals (always visible) */}
                   {recentPast.map((eta, i) => {
-                    const pastMin = Math.round((nowUnix - (eta.observed_arrival_unix ?? 0)) / 60);
-                    const delaySec = (eta.observed_arrival_unix ?? 0) - eta.scheduled_arrival_unix;
-                    let directionLabel = '';
-                    let directionColor = 'text-gray-400';
-                    let directionBg = 'bg-gray-400/10';
-                    if (delaySec < -60) { directionLabel = 'Adiantado'; directionColor = 'text-blue-400'; directionBg = 'bg-blue-400/10'; }
-                    else if (delaySec > 120) { directionLabel = `+${Math.round(delaySec / 60)}min`; directionColor = 'text-orange-400'; directionBg = 'bg-orange-400/10'; }
-                    else { directionLabel = 'Pontual'; directionColor = 'text-green-400'; directionBg = 'bg-green-400/10'; }
+                    const wentBy = wentByAt(eta) ?? 0;
+                    const pastMin = Math.round((nowUnix - wentBy) / 60);
+                    const punctuality = describePunctuality(eta) ?? describePassage(eta);
+                    const directionLabel = punctuality.label;
+                    const directionColor = PunctualityColour[punctuality.tone];
+                    const directionBg = PunctualityBackground[punctuality.tone];
 
                     const canTrack = !!eta.vehicle_id;
                     const isSelected = canTrack && selectedVehicleId === eta.vehicle_id;
@@ -302,7 +314,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                     return (
                       <div
                         key={`past-recent-${eta.vehicle_id || eta.line_id}-${i}`}
-                        onClick={canTrack && onVehicleSelect ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id) : undefined}
+                        onClick={canTrack && onVehicleSelect ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id, eta.trip_id) : undefined}
                         className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
                           isSelected
                             ? 'bg-carris-yellow/10 border-carris-yellow/40 ring-1 ring-carris-yellow/30 opacity-90'
@@ -324,7 +336,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                         <div className="flex-shrink-0 text-right pl-2">
                           <div className="font-bold text-[15px] leading-tight text-gray-500">Há {pastMin}min</div>
                           <div className="text-[10px] text-gray-500 font-mono leading-tight mt-0.5">
-                            {fromUnixTime((eta.observed_arrival_unix ?? 0)).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                            {fromUnixTime(wentBy).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </div>
                       </div>
@@ -370,7 +382,9 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                   }
 
                   let displayTime: string;
-                  if (diffSec <= 30) {
+                  if (diffSec < -60) {
+                    displayTime = '';
+                  } else if (diffSec <= 30) {
                     displayTime = 'Agora';
                   } else if (diffMinutes <= 0) {
                     // Same clock minute as "now" but still 31–59s away
@@ -387,7 +401,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                     <div
                       key={`future-${eta.vehicle_id || eta.line_id}-${i}`}
                       onClick={hasVehicle && onVehicleSelect
-                        ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id)
+                        ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id, eta.trip_id)
                         : undefined}
                       className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all ${
                         hasVehicle ? 'cursor-pointer active:scale-[0.98]' : ''

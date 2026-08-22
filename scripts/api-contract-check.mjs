@@ -14,7 +14,11 @@
  * Exit code 0 = contract holds, 1 = something the app relies on changed.
  */
 
+import { readFile } from 'node:fs/promises';
+
+const STOP_ID_MAP = new URL('../backend/src/BusLisbon.Api/Schedules/stop-id-map.json', import.meta.url);
 const BASE = 'https://api.carrismetropolitana.pt';
+const HUB = 'https://go.tmlmobilidade.pt/hub/api/v1';
 const FRESH_WINDOW_SEC = 180;
 const ARRIVAL_SAMPLE = 12;
 
@@ -30,11 +34,11 @@ function warn(check, detail) {
 
 const UPSTREAM_ATTEMPTS = 3;
 
-async function getJson(path) {
+async function getJson(path, base = BASE) {
   let lastStatus = 0;
 
   for (let attempt = 1; attempt <= UPSTREAM_ATTEMPTS; attempt++) {
-    const res = await fetch(`${BASE}${path}`, { headers: { accept: 'application/json' } });
+    const res = await fetch(`${base}${path}`, { headers: { accept: 'application/json' } });
     if (res.ok) return res.json();
 
     lastStatus = res.status;
@@ -51,7 +55,13 @@ function isFiniteNum(v) {
 
 // Holds values discovered in earlier checks so later checks can stay dynamic
 // (no hardcoded stop/pattern ids that could be retired by Carris).
-const discovered = { stopId: null, patternId: null, stopIds: [] };
+const discovered = { stopId: null, patternId: null, stopIds: [], network: null, networkStop: null };
+
+function operationalDay() {
+  const lisbon = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Lisbon' }));
+  if (lisbon.getHours() < 4) lisbon.setDate(lisbon.getDate() - 1);
+  return `${lisbon.getFullYear()}${String(lisbon.getMonth() + 1).padStart(2, '0')}${String(lisbon.getDate()).padStart(2, '0')}`;
+}
 
 // ── 1. Vehicle positions feed (/v2/vehicles) ──────────────────────────
 async function checkVehicles() {
@@ -107,47 +117,165 @@ async function checkVehicles() {
 }
 
 // ── 2. Stop arrivals / ETAs (/stops/:id/realtime) ─────────────────
-async function checkArrivals() {
-  const name = '/stops/:id/realtime';
-  const stopIds = discovered.stopIds.length ? discovered.stopIds : ['170453'];
-  const answers = [];
+async function checkNetworkStops() {
+  const name = 'hub network/stops';
+  let stops;
+  try {
+    stops = (await getJson('/network/stops', HUB)).data;
+  } catch (e) {
+    fail(name, `${e.message} — every board starts by resolving the stop here`);
+    return;
+  }
+  if (!Array.isArray(stops) || stops.length < 10000) {
+    fail(name, `expected the whole network, got ${Array.isArray(stops) ? stops.length : typeof stops}`);
+    return;
+  }
+  const probe = stops.slice(0, 500);
+  const withPatterns = probe.filter(s => Array.isArray(s.pattern_ids)).length;
+  if (withPatterns / probe.length < 0.9) {
+    fail(name, `only ${withPatterns}/${probe.length} sampled stops list pattern_ids`);
+  }
+  discovered.network = new Set(stops.map(s => String(s._id)));
+  discovered.networkStop = stops.find(s => Array.isArray(s.pattern_ids) && s.pattern_ids.length > 3) || stops[0];
+}
 
-  for (const stopId of stopIds) {
+async function checkStopIdMap() {
+  const name = 'stop id map';
+  if (!discovered.network) return;
+
+  let map;
+  try {
+    map = JSON.parse(await readFile(STOP_ID_MAP, 'utf8'));
+  } catch (e) {
+    fail(name, `could not read the mapping the backend ships: ${e.message}`);
+    return;
+  }
+
+  let appStops;
+  try {
+    appStops = await getJson('/stops');
+  } catch {
+    return;
+  }
+
+  const resolved = appStops.filter(stop => {
+    const id = String(stop.id);
+    const mapped = discovered.network.has(id) ? id : String(map[id] ?? '');
+    return discovered.network.has(mapped);
+  }).length;
+
+  const share = resolved / appStops.length;
+  if (share < 0.9) {
+    fail(name, `only ${resolved} of ${appStops.length} stops on the map resolve onto the network (${(share * 100).toFixed(1)}%) — the mapping needs refreshing from carrismetropolitana/api`);
+  } else {
+    warn(name, `${resolved} of ${appStops.length} stops resolve onto the network (${(share * 100).toFixed(1)}%)`);
+  }
+}
+
+async function checkTimetable() {
+  const name = 'hub network/patterns';
+  const stop = discovered.networkStop;
+  if (!stop) return;
+
+  const today = operationalDay();
+  const sampled = stop.pattern_ids.slice(0, 5);
+  let plansSeen = 0;
+  let runningToday = 0;
+
+  for (const patternId of sampled) {
+    let plans;
     try {
-      const data = await getJson(`/stops/${stopId}/realtime`);
+      plans = (await getJson(`/network/patterns/${encodeURIComponent(patternId)}`, HUB)).data;
+    } catch (e) {
+      fail(name, `${e.message} — the whole arrivals board is built from this`);
+      return;
+    }
+    if (!Array.isArray(plans)) {
+      fail(name, 'a pattern no longer answers with a list of plans, which is where every plan after the first lives');
+      return;
+    }
+
+    plansSeen += plans.length;
+    const trips = plans.flatMap(plan => plan.trips ?? []);
+
+    if (trips.length === 0) continue;
+
+    const trip = trips[0];
+    for (const field of ['schedule', 'trip_ids', 'valid_on']) {
+      if (!Array.isArray(trip[field])) fail(name, `a trip group of ${patternId} is missing ${field}`);
+    }
+    const call = (trip.schedule ?? [])[0];
+    if (call) {
+      for (const field of ['arrival_time', 'stop_id', 'stop_sequence']) {
+        if (!(field in call)) fail(name, `a schedule entry of ${patternId} is missing ${field}`);
+      }
+    }
+
+    runningToday += trips.filter(t => (t.valid_on ?? []).includes(today)).length;
+  }
+
+  if (plansSeen === 0) {
+    fail(name, `none of the ${sampled.length} sampled patterns carries a plan`);
+    return;
+  }
+  if (runningToday === 0) {
+    fail(name, `none of the ${sampled.length} sampled patterns has a trip valid on ${today} — the board would be empty everywhere`);
+    return;
+  }
+
+  warn(name, `${plansSeen} plans across ${sampled.length} patterns, ${runningToday} trip groups running on ${today}`);
+}
+
+async function checkLiveEtas() {
+  const name = 'hub realtime/eta/by-stop';
+  if (!discovered.network) return;
+
+  const sample = [...discovered.network].slice(0, ARRIVAL_SAMPLE * 20).filter((_, i) => i % 20 === 0);
+  const rows = [];
+
+  for (const stopId of sample) {
+    try {
+      const data = (await getJson(`/realtime/eta/by-stop/${stopId}`, HUB)).data;
       if (!Array.isArray(data)) {
-        fail(name, `response for stop ${stopId} is not an array`);
+        fail(name, `stop ${stopId} did not answer with a list`);
         return;
       }
-      answers.push({ stopId, data });
+      rows.push(...data);
     } catch (e) {
-      fail(name, `${e.message} (this endpoint powers the ETA panel, the alerts and the daily collection)`);
+      fail(name, `${e.message} — this is the only live arrival time we have`);
       return;
     }
   }
 
-  const withArrivals = answers.filter(a => a.data.length > 0);
-
-  if (withArrivals.length === 0) {
-    fail(
-      name,
-      `all ${answers.length} sampled stops returned an empty array — the feed is drained, ` +
-      'so the ETA panel, the alerts and the daily collection have nothing to work with ' +
-      `(stops tried: ${answers.map(a => a.stopId).join(', ')})`
-    );
+  if (rows.length === 0) {
+    warn(name, `no live arrival across ${sample.length} stops right now — normal at night, a problem in the middle of the day`);
     return;
   }
 
-  warn(name, `${withArrivals.length} of ${answers.length} sampled stops carry arrivals`);
+  warn(name, `${rows.length} live arrivals across ${sample.length} stops`);
 
-  const required = ['line_id', 'headsign', 'estimated_arrival_unix', 'scheduled_arrival_unix', 'vehicle_id', 'pattern_id'];
-  const sample = withArrivals[0].data[0];
-  const missing = required.filter(k => !(k in sample));
-  if (missing.length) fail(name, `arrival is missing fields: ${missing.join(', ')}`);
+  for (const field of ['trip_id', 'eta_at']) {
+    if (rows.every(row => row[field] == null)) {
+      fail(name, `no arrival carries ${field}`);
+    }
+  }
 
-  const observed = withArrivals.some(a => a.data.some(x => isFiniteNum(x.observed_arrival_unix)));
-  if (!observed) {
-    warn(name, 'no sampled passage carries observed_arrival_unix right now — the daily collection would store nothing');
+  const stamped = rows.filter(row => Number(row.eta_at) > 1e12).length;
+  if (stamped === 0) {
+    fail(name, 'eta_at stopped being a millisecond stamp — every arrival time would be wrong by a factor of a thousand');
+  }
+}
+
+async function checkDrainedArrivals() {
+  const name = '/stops/:id/realtime (drained since 2026-08-21)';
+  const stopId = discovered.stopId || '170453';
+  try {
+    const data = await getJson(`/stops/${stopId}/realtime`);
+    if (Array.isArray(data) && data.length) {
+      warn(name, `the old arrivals endpoint is answering again (${data.length} rows) — worth comparing against the hub`);
+    }
+  } catch {
+    // it is expected to be dead
   }
 }
 
@@ -248,7 +376,17 @@ async function checkV2StopsReadiness() {
 
 async function main() {
   await checkVehicles();
-  await Promise.all([checkArrivals(), checkStops(), checkPatternShape(), checkV2StopsReadiness(), checkV2ArrivalsReadiness()]);
+  await checkNetworkStops();
+  await Promise.all([
+    checkStopIdMap(),
+    checkTimetable(),
+    checkLiveEtas(),
+    checkStops(),
+    checkPatternShape(),
+    checkV2StopsReadiness(),
+    checkV2ArrivalsReadiness(),
+    checkDrainedArrivals(),
+  ]);
 
   console.log('\nCarris API contract check —', new Date().toISOString());
   console.log('='.repeat(60));

@@ -40,13 +40,45 @@ export function toVehicle(payload: GatewayVehicleResponse): Vehicle {
   };
 }
 
+export function isFleetVehicleId(vehicleId: string | null | undefined): boolean {
+  return typeof vehicleId === 'string' && /^\d+\|\d+$/.test(vehicleId);
+}
+
+export interface StreamSubscription {
+  vehicleId: string | null;
+  lineId: string | null;
+}
+
+export function streamSubscriptionFor(
+  vehicleId: string | null,
+  lineId: string | null | undefined,
+  tripId?: string | null
+): StreamSubscription {
+  if (isFleetVehicleId(vehicleId)) return { vehicleId, lineId: null };
+  if (tripId) return { vehicleId: null, lineId: null };
+
+  return { vehicleId: null, lineId: lineId ?? null };
+}
+
 export function gatewayVehicleUrl(
   base: string,
   vehicleId: string | null,
   lineId: string | null | undefined,
-  patternId: string | null | undefined
+  patternId: string | null | undefined,
+  tripId?: string | null
 ): string | null {
-  if (vehicleId) return `${base}/api/vehicles/${encodeURIComponent(vehicleId)}`;
+  if (!vehicleId && !lineId) return null;
+
+  if (isFleetVehicleId(vehicleId)) return `${base}/api/vehicles/${encodeURIComponent(vehicleId as string)}`;
+
+  if (tripId) {
+    const asked = new URLSearchParams();
+
+    if (vehicleId) asked.set('number', vehicleId);
+    if (lineId) asked.set('lineId', lineId);
+
+    return `${base}/api/vehicles/by-trip/${encodeURIComponent(tripId)}?${asked.toString()}`;
+  }
   if (!lineId) return null;
 
   const path = `${base}/api/vehicles/by-line/${encodeURIComponent(lineId)}`;

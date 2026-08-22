@@ -1,5 +1,7 @@
 using BusLisbon.Api.Alerts;
 using BusLisbon.Api.Carris;
+using BusLisbon.Api.Schedules;
+using BusLisbon.Api.Vehicles;
 using Lib.Net.Http.WebPush;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -15,6 +17,9 @@ public static class AlertCheckJob
 
         builder.Services.AddSingleton(TimeProvider.System);
         CarrisClient.AddCarrisClient(builder.Services, builder.Configuration);
+        TmlNetworkClient.AddTmlNetwork(builder.Services, builder.Configuration);
+        builder.Services.AddSingleton<VehicleGateway>();
+        builder.Services.AddScoped<ICarrisArrivals, BoardArrivals>();
         UpstashKeyValueStore.AddUpstash(builder.Services, builder.Configuration);
         builder.Services.Configure<VapidOptions>(builder.Configuration.GetSection(VapidOptions.SectionName));
         builder.Services.Configure<AlertOptions>(builder.Configuration.GetSection(AlertOptions.SectionName));

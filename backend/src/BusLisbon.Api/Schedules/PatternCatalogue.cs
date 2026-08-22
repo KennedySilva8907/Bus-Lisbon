@@ -7,7 +7,7 @@ namespace BusLisbon.Api.Schedules;
 public sealed class PatternCatalogue(
     IServiceScopeFactory scopes, IOptions<TmlOptions> options, TimeProvider clock)
 {
-    private readonly ConcurrentDictionary<string, TmlPattern?> patterns = new();
+    private readonly ConcurrentDictionary<string, IReadOnlyList<TmlPattern>> patterns = new();
     private readonly SemaphoreSlim gate = new(1, 1);
 
     private IReadOnlyDictionary<string, IReadOnlyList<string>> stops =
@@ -34,17 +34,18 @@ public sealed class PatternCatalogue(
         return stops.TryGetValue(stopId, out var ids) ? ids : [];
     }
 
-    public async Task<TmlPattern?> PatternAsync(string patternId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<TmlPattern>> PatternAsync(
+        string patternId, CancellationToken cancellationToken)
     {
         if (patterns.TryGetValue(patternId, out var known)) return known;
 
         using var scope = scopes.CreateScope();
         var network = scope.ServiceProvider.GetRequiredService<ITmlNetwork>();
-        var pattern = await network.GetPatternAsync(patternId, cancellationToken);
+        var plans = await network.GetPatternAsync(patternId, cancellationToken);
 
-        patterns[patternId] = pattern;
+        patterns[patternId] = plans;
 
-        return pattern;
+        return plans;
     }
 
     private async Task EnsureStopsAsync(CancellationToken cancellationToken)

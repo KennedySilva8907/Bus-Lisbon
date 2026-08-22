@@ -28,7 +28,7 @@ public interface ITmlNetwork
 {
     Task<IReadOnlyList<TmlStop>> GetStopsAsync(CancellationToken cancellationToken);
 
-    Task<TmlPattern?> GetPatternAsync(string patternId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<TmlPattern>> GetPatternAsync(string patternId, CancellationToken cancellationToken);
 }
 
 public sealed class TmlNetworkClient(HttpClient http) : ITmlNetwork
@@ -46,19 +46,20 @@ public sealed class TmlNetworkClient(HttpClient http) : ITmlNetwork
         return envelope?.Data ?? throw new TmlFeedException("The stops feed returned no array");
     }
 
-    public async Task<TmlPattern?> GetPatternAsync(string patternId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<TmlPattern>> GetPatternAsync(
+        string patternId, CancellationToken cancellationToken)
     {
         var response = await http.GetAsync(
             $"/hub/api/v1/network/patterns/{Uri.EscapeDataString(patternId)}", cancellationToken);
 
-        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        if (response.StatusCode == HttpStatusCode.NotFound) return [];
 
         response.EnsureSuccessStatusCode();
 
         var envelope = await response.Content
             .ReadFromJsonAsync<TmlEnvelope<List<TmlPattern>>>(SerializerOptions, cancellationToken);
 
-        return envelope?.Data?.FirstOrDefault();
+        return envelope?.Data ?? [];
     }
 
     public static IServiceCollection AddTmlNetwork(IServiceCollection services, IConfiguration configuration)

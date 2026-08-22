@@ -26,11 +26,10 @@ public static class ScheduleEndpoints
 
             foreach (var patternId in patternIds)
             {
-                var pattern = await catalogue.PatternAsync(patternId, cancellationToken);
-
-                if (pattern is null) continue;
-
-                timetable.AddRange(ScheduleReader.CallsAt(pattern, networkStopId, today, zone));
+                foreach (var plan in await catalogue.PatternAsync(patternId, cancellationToken))
+                {
+                    timetable.AddRange(ScheduleReader.CallsAt(plan, networkStopId, today, zone));
+                }
             }
 
             var live = await arrivals.GetApproachingAsync(networkStopId, now, cancellationToken);

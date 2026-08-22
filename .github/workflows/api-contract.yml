@@ -1,21 +1,37 @@
 name: API contract
 
-# Early-warning system for upstream changes to the Carris Metropolitana API.
-# Runs the live contract check daily; if the API drifts from what the app
-# expects, the job fails (GitHub emails the repo owner) and an issue is opened.
+# Early warning for upstream changes.
+#
+# Hourly: the shape check in light mode. It reads the live payloads the app
+# depends on and compares every field against scripts/api-shape.json, so a
+# field appearing, vanishing or changing type is caught before it breaks
+# anything. About 4.6 MB a run, and it skips the two big catalogues.
+#
+# Daily: the same check over everything, plus the contract check, which asserts
+# the handful of things the app cannot work without.
+#
+# Either failing opens an issue saying what moved, assigned so it is not missed.
 
 on:
   schedule:
-    - cron: '0 7 * * *' # every day at 07:00 UTC
-  workflow_dispatch: {}
+    - cron: '0 * * * *'
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Check everything, not just the light probes
+        type: boolean
+        default: true
 
 permissions:
   contents: read
   issues: write
 
 jobs:
-  contract:
+  watch:
     runs-on: ubuntu-latest
+    env:
+      FULL: ${{ github.event.schedule == '0 7 * * *' || inputs.full || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -23,17 +39,52 @@ jobs:
         with:
           node-version: 22
 
-      - name: Run Carris API contract check
-        run: node scripts/api-contract-check.mjs
+      - name: Check the shape of every payload
+        id: shape
+        run: |
+          if [ "$FULL" = "true" ]; then
+            node scripts/api-shape.mjs 2>&1 | tee shape.log
+          else
+            node scripts/api-shape.mjs --light 2>&1 | tee shape.log
+          fi
 
-      - name: Open an issue if the contract broke
+      - name: Check the contract the app relies on
+        id: contract
+        if: env.FULL == 'true' && always()
+        run: node scripts/api-contract-check.mjs 2>&1 | tee contract.log
+
+      - name: Say what moved
         if: failure()
         uses: actions/github-script@v7
         with:
           script: |
+            const fs = require('fs');
             const label = 'api-drift';
-            const title = 'Carris API contract check failed — the API may have changed';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const read = name => {
+              try { return fs.readFileSync(name, 'utf8').trim(); } catch { return ''; }
+            };
+
+            const after = (text, marker) => text.includes(marker)
+              ? '```\n' + text.split(marker)[1].trim() + '\n```'
+              : '';
+
+            const moved = '${{ steps.shape.outcome }}' === 'failure';
+            const broke = '${{ steps.contract.outcome }}' === 'failure';
+
+            const body = [
+              broke
+                ? 'A check the app cannot work without has failed.'
+                : 'Nothing is broken yet. A payload stopped looking the way it was recorded.',
+              '',
+              moved ? after(read('shape.log'), 'WHAT CHANGED:') : '',
+              broke ? after(read('contract.log'), 'FAILURES:') : '',
+              '',
+              `Run: ${runUrl}`,
+              '',
+              moved ? 'Once the app handles the new shape, `npm run record:api` writes it back.' : '',
+            ].filter(Boolean).join('\n');
 
             const { data: open } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
@@ -41,23 +92,29 @@ jobs:
               state: 'open',
               labels: label,
             });
+
             if (open.length > 0) {
-              core.info(`An open "${label}" issue already exists (#${open[0].number}); not creating a duplicate.`);
+              const quiet = Date.now() - new Date(open[0].updated_at).getTime() > 20 * 60 * 60 * 1000;
+
+              if (quiet) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: open[0].number,
+                  body: `Still happening.\n\n${body}`,
+                });
+              }
+
               return;
             }
 
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title,
+              title: broke
+                ? 'The Carris API broke something the app relies on'
+                : 'The Carris API changed shape',
               labels: [label],
-              body: [
-                'The scheduled **API contract check** failed.',
-                '',
-                'This usually means the Carris Metropolitana API changed shape, so the live tracker, ETAs, or push alerts may be (or are about to be) broken.',
-                '',
-                `**Failing run:** ${runUrl}`,
-                '',
-                'Open the run logs to see exactly which check failed, then update `src/services/api.ts` (and `backend/src/BusLisbon.Api/Carris/` if arrivals or vehicles are involved) accordingly.',
-              ].join('\n'),
+              assignees: ['KennedySilva8907'],
+              body,
             });

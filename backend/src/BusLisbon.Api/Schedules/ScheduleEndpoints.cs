@@ -32,7 +32,7 @@ public static class ScheduleEndpoints
                 }
             }
 
-            var live = await arrivals.GetApproachingAsync(networkStopId, now, cancellationToken);
+            var live = await arrivals.GetApproachingAsync(networkStopId, cancellationToken);
             var etas = live.Values
                 .Select(trip => new LiveEta(trip.TripId, trip.PatternId, trip.VehicleId, trip.EtaUnix))
                 .ToList();

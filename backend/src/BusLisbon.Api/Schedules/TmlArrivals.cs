@@ -10,8 +10,8 @@ public sealed class TmlArrival
     [JsonPropertyName("trip_id")]
     public string TripId { get; set; } = string.Empty;
 
-    [JsonPropertyName("eta_seconds")]
-    public double? EtaSeconds { get; set; }
+    [JsonPropertyName("eta_at")]
+    public double? EtaAt { get; set; }
 
     [JsonPropertyName("vehicle_id")]
     public string? VehicleId { get; set; }
@@ -24,7 +24,7 @@ public sealed record ApproachingTrip(string TripId, string PatternId, string Lin
 public interface ITmlArrivals
 {
     Task<Dictionary<string, ApproachingTrip>> GetApproachingAsync(
-        string stopId, long nowUnix, CancellationToken cancellationToken);
+        string stopId, CancellationToken cancellationToken);
 }
 
 public sealed partial class TmlArrivalsClient(HttpClient http) : ITmlArrivals
@@ -55,8 +55,13 @@ public sealed partial class TmlArrivalsClient(HttpClient http) : ITmlArrivals
             : null;
     }
 
+    public static long? EstimatedUnix(double? etaAt) =>
+        etaAt is { } milliseconds && double.IsFinite(milliseconds) && milliseconds > 0
+            ? (long)Math.Round(milliseconds / 1000)
+            : null;
+
     public async Task<Dictionary<string, ApproachingTrip>> GetApproachingAsync(
-        string stopId, long nowUnix, CancellationToken cancellationToken)
+        string stopId, CancellationToken cancellationToken)
     {
         var envelope = await http.GetFromJsonAsync<TmlEnvelope<List<TmlArrival>>>(
             $"/hub/api/v1/realtime/eta/by-stop/{Uri.EscapeDataString(stopId)}",
@@ -70,11 +75,11 @@ public sealed partial class TmlArrivalsClient(HttpClient http) : ITmlArrivals
             var trip = ReadTripId(arrival.TripId);
 
             if (trip is null) continue;
-            if (arrival.EtaSeconds is not { } seconds || !double.IsFinite(seconds)) continue;
+            if (EstimatedUnix(arrival.EtaAt) is not { } estimated) continue;
 
             approaching[arrival.TripId] = new ApproachingTrip(
                 arrival.TripId, trip.AgencyPatternId, trip.LineId, arrival.VehicleId ?? string.Empty,
-                nowUnix + (long)Math.Round(seconds));
+                estimated);
         }
 
         return approaching;

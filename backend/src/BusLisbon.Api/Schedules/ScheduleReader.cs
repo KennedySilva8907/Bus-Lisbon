@@ -30,6 +30,16 @@ public static class ScheduleReader
         return new DateTimeOffset(midnight, offset).ToUnixTimeSeconds() + secondsIntoDay;
     }
 
+    public const int OperationalDayStartsAt = 4;
+
+    public static DateOnly OperationalDay(DateTimeOffset now, TimeZoneInfo zone)
+    {
+        var local = TimeZoneInfo.ConvertTime(now, zone);
+
+        return DateOnly.FromDateTime(
+            local.Hour < OperationalDayStartsAt ? local.AddDays(-1).DateTime : local.DateTime);
+    }
+
     public static string DepartureTag(string tripId)
     {
         var cut = tripId.LastIndexOf('|');

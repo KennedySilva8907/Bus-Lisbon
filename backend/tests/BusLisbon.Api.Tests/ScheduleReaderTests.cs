@@ -128,6 +128,42 @@ public class ScheduleReaderTests
     }
 }
 
+public class OperationalDayTests
+{
+    private static readonly TimeZoneInfo Lisbon = TimeZoneInfo.FindSystemTimeZoneById("Europe/Lisbon");
+
+    private static DateOnly At(string utc) =>
+        ScheduleReader.OperationalDay(DateTimeOffset.Parse(utc, null, System.Globalization.DateTimeStyles.AdjustToUniversal), Lisbon);
+
+    [Fact]
+    public void CountsTheSmallHoursAsThePreviousDay()
+    {
+        Assert.Equal(new DateOnly(2026, 8, 21), At("2026-08-22T02:18:00Z"));
+        Assert.Equal(new DateOnly(2026, 8, 21), At("2026-08-22T00:05:00Z"));
+    }
+
+    [Fact]
+    public void RollsOverAtFourInTheMorning()
+    {
+        Assert.Equal(new DateOnly(2026, 8, 21), At("2026-08-22T02:59:00Z"));
+        Assert.Equal(new DateOnly(2026, 8, 22), At("2026-08-22T03:00:00Z"));
+    }
+
+    [Fact]
+    public void LeavesTheRestOfTheDayAlone()
+    {
+        Assert.Equal(new DateOnly(2026, 8, 22), At("2026-08-22T12:00:00Z"));
+        Assert.Equal(new DateOnly(2026, 8, 22), At("2026-08-22T22:30:00Z"));
+    }
+
+    [Fact]
+    public void ReadsTheClockInLisbonRatherThanInUtc()
+    {
+        Assert.Equal(new DateOnly(2026, 8, 22), At("2026-08-22T23:30:00Z"));
+        Assert.Equal(new DateOnly(2026, 1, 21), At("2026-01-22T02:00:00Z"));
+    }
+}
+
 public class LineNameTests
 {
     [Fact]

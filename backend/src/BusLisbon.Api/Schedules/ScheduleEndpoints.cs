@@ -20,7 +20,7 @@ public static class ScheduleEndpoints
 
             var zone = TimeZoneInfo.FindSystemTimeZoneById(options.Value.TimeZone);
             var now = clock.GetUtcNow().ToUnixTimeSeconds();
-            var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), zone).DateTime);
+            var today = ScheduleReader.OperationalDay(clock.GetUtcNow(), zone);
             var patternIds = await catalogue.PatternIdsForAsync(networkStopId, cancellationToken);
             var timetable = new List<ScheduledCall>();
 

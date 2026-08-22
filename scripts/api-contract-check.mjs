@@ -266,6 +266,34 @@ async function checkLiveEtas() {
   }
 }
 
+async function checkPositionsReadiness() {
+  const name = 'hub realtime/vehicles/positions (migration readiness)';
+  let now;
+  let next;
+
+  try {
+    now = await getJson('/v2/vehicles');
+    next = (await getJson('/realtime/vehicles/positions', HUB)).data;
+  } catch {
+    return;
+  }
+  if (!Array.isArray(now) || !Array.isArray(next)) return;
+
+  const positioned = now.filter(v => isFiniteNum(v.lat) && isFiniteNum(v.lon)).length;
+  const carried = next.filter(v => isFiniteNum(v.latitude) && isFiniteNum(v.longitude)).length;
+  const withSpeed = next.filter(v => v.speed !== null && v.speed !== undefined).length;
+  const withBearing = next.filter(v => v.bearing !== null && v.bearing !== undefined).length;
+
+  const share = positioned ? carried / positioned : 0;
+  const ready = share > 0.9 && withSpeed > 0 && withBearing / Math.max(carried, 1) > 0.9;
+
+  if (ready) {
+    warn(name, `the new feed carries ${carried} positioned vehicles against ${positioned} on the old one, with speed and bearing — the map can move over (#159)`);
+  } else {
+    warn(name, `not ready: ${carried} positioned against ${positioned} (${(share * 100).toFixed(0)}%), ${withSpeed} with speed, ${withBearing} with bearing`);
+  }
+}
+
 async function checkDrainedArrivals() {
   const name = '/stops/:id/realtime (drained since 2026-08-21)';
   const stopId = discovered.stopId || '170453';
@@ -386,6 +414,7 @@ async function main() {
     checkV2StopsReadiness(),
     checkV2ArrivalsReadiness(),
     checkDrainedArrivals(),
+    checkPositionsReadiness(),
   ]);
 
   console.log('\nCarris API contract check —', new Date().toISOString());

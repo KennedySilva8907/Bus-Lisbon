@@ -7,7 +7,8 @@ namespace BusLisbon.Api.Observations;
 public sealed record CollectionReport(int StopsRead, int StopsFailed, int Seen, int Written);
 
 public sealed class ArrivalCollector(
-    ICarrisArrivals arrivals,
+    ICarrisClient fleet,
+    IPassageObserver observer,
     ObservationsContext database,
     IOptions<CollectionOptions> options,
     ILogger<ArrivalCollector> logger)
@@ -15,35 +16,27 @@ public sealed class ArrivalCollector(
     public async Task<CollectionReport> CollectOnceAsync(
         IReadOnlyList<string> stopIds, CancellationToken cancellationToken)
     {
-        var zone = TimeZoneInfo.FindSystemTimeZoneById(options.Value.TimeZone);
+        IReadOnlyList<Vehicles.Vehicle> buses;
+
+        try
+        {
+            buses = [.. (await fleet.GetVehiclesAsync(cancellationToken)).Select(Vehicles.Vehicle.From)];
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "Reading the fleet failed, nothing to record this run");
+
+            return new CollectionReport(0, 1, 0, 0);
+        }
+
+        var watched = stopIds.ToHashSet();
+        var passages = await observer.ObserveAsync(buses, watched, cancellationToken);
         var pending = new List<ArrivalObservation>();
-        var read = 0;
-        var failed = 0;
-        var seen = 0;
         var written = 0;
 
-        foreach (var stopId in stopIds)
+        foreach (var byStop in passages.GroupBy(passage => passage.StopId))
         {
-            IReadOnlyList<CarrisArrival> stopArrivals;
-
-            try
-            {
-                stopArrivals = await arrivals.GetArrivalsAsync(stopId, cancellationToken);
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                failed++;
-                logger.LogWarning(exception, "Reading arrivals for stop {StopId} failed", stopId);
-
-                continue;
-            }
-
-            read++;
-
-            var passages = ObservedPassages.From(stopId, stopArrivals, zone);
-            seen += passages.Count;
-
-            pending.AddRange(await OnlyNewAsync(stopId, passages, cancellationToken));
+            pending.AddRange(await OnlyNewAsync(byStop.Key, [.. byStop], cancellationToken));
 
             if (pending.Count >= options.Value.BatchSize)
             {
@@ -53,7 +46,7 @@ public sealed class ArrivalCollector(
 
         written += await FlushAsync(pending, cancellationToken);
 
-        return new CollectionReport(read, failed, seen, written);
+        return new CollectionReport(watched.Count, 0, passages.Count, written);
     }
 
     private async Task<IReadOnlyList<ArrivalObservation>> OnlyNewAsync(

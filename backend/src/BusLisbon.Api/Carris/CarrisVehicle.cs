@@ -28,6 +28,9 @@ public sealed record CarrisVehicle
     [JsonPropertyName("speed")]
     public double? Speed { get; init; }
 
+    [JsonPropertyName("current_status")]
+    public string? CurrentStatus { get; init; }
+
     [JsonPropertyName("stop_id")]
     public string? StopId { get; init; }
 

@@ -1,5 +1,6 @@
 using BusLisbon.Api.Carris;
 using BusLisbon.Api.Observations;
+using BusLisbon.Api.Vehicles;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,7 +12,8 @@ public class ArrivalCollectorTests : IDisposable
 {
     private readonly SqliteConnection _connection = new("Filename=:memory:");
     private readonly DbContextOptions<ObservationsContext> _options;
-    private readonly StubArrivals _arrivals = new();
+    private readonly StubObserver _observer = new();
+    private readonly StubFleet _fleet = new();
 
     public ArrivalCollectorTests()
     {
@@ -29,29 +31,32 @@ public class ArrivalCollectorTests : IDisposable
         await using var context = Open();
 
         var collector = new ArrivalCollector(
-            _arrivals, context, Options.Create(new CollectionOptions { BatchSize = 2 }),
+            _fleet, _observer, context, Options.Create(new CollectionOptions { BatchSize = 2 }),
             NullLogger<ArrivalCollector>.Instance);
 
         return await collector.CollectOnceAsync(stops, CancellationToken.None);
     }
 
-    private static CarrisArrival Passage(long scheduled, long? observed, string lineId = "1235") => new()
+    private static ArrivalObservation Passage(
+        long scheduled, long observed, string stopId = "A", string lineId = "1235") => new()
     {
         LineId = lineId,
+        StopId = stopId,
         PatternId = "1235_0_2",
-        ScheduledArrivalUnix = scheduled,
-        EstimatedArrivalUnix = scheduled + 60,
-        ObservedArrivalUnix = observed,
+        ServiceDate = new DateOnly(2026, 8, 22),
+        ScheduledUnix = scheduled,
+        ObservedUnix = observed,
     };
 
     [Fact]
-    public async Task ItWritesThePassagesItFound()
+    public async Task ItWritesThePassagesItSaw()
     {
-        _arrivals.For("A", Passage(1_755_500_000, 1_755_500_120), Passage(1_755_503_600, 1_755_503_700));
+        _observer.Saw(Passage(1_755_500_000, 1_755_500_120), Passage(1_755_503_600, 1_755_503_700));
 
         var report = await CollectAsync("A");
 
         Assert.Equal(2, report.Written);
+        Assert.Equal(2, report.Seen);
         Assert.Equal(1, report.StopsRead);
 
         await using var context = Open();
@@ -59,107 +64,79 @@ public class ArrivalCollectorTests : IDisposable
     }
 
     [Fact]
-    public async Task APassageNobodySawIsNotWritten()
+    public async Task ItDoesNotWriteThePassageTwice()
     {
-        _arrivals.For("A", Passage(1_755_500_000, observed: null));
-
-        var report = await CollectAsync("A");
-
-        Assert.Equal(0, report.Written);
-    }
-
-    [Fact]
-    public async Task RunningItTwiceWritesNothingTheSecondTime()
-    {
-        _arrivals.For("A", Passage(1_755_500_000, 1_755_500_120));
-
+        _observer.Saw(Passage(1_755_500_000, 1_755_500_120));
         await CollectAsync("A");
+
+        _observer.Saw(Passage(1_755_500_000, 1_755_500_180));
         var again = await CollectAsync("A");
 
         Assert.Equal(0, again.Written);
-        Assert.Equal(1, again.Seen);
 
         await using var context = Open();
         Assert.Equal(1, await context.Arrivals.CountAsync());
     }
 
     [Fact]
-    public async Task ASecondRunStillPicksUpWhatAppearedSince()
+    public async Task ItKeepsTheSameDepartureOnDifferentLines()
     {
-        _arrivals.For("A", Passage(1_755_500_000, 1_755_500_120));
-        await CollectAsync("A");
+        _observer.Saw(
+            Passage(1_755_500_000, 1_755_500_120, lineId: "1235"),
+            Passage(1_755_500_000, 1_755_500_150, lineId: "1236"));
 
-        _arrivals.For("A", Passage(1_755_500_000, 1_755_500_120), Passage(1_755_507_200, 1_755_507_300));
-        var again = await CollectAsync("A");
-
-        Assert.Equal(1, again.Written);
-
-        await using var context = Open();
-        Assert.Equal(2, await context.Arrivals.CountAsync());
-    }
-
-    [Fact]
-    public async Task AStopThatFailsDoesNotStopTheOthers()
-    {
-        _arrivals.Fail("A");
-        _arrivals.For("B", Passage(1_755_500_000, 1_755_500_120));
-
-        var report = await CollectAsync("A", "B");
-
-        Assert.Equal(1, report.StopsFailed);
-        Assert.Equal(1, report.StopsRead);
-        Assert.Equal(1, report.Written);
-    }
-
-    [Fact]
-    public async Task TheSameTimetableSlotAtTwoStopsIsTwoPassages()
-    {
-        _arrivals.For("A", Passage(1_755_500_000, 1_755_500_120));
-        _arrivals.For("B", Passage(1_755_500_000, 1_755_500_300));
-
-        var report = await CollectAsync("A", "B");
+        var report = await CollectAsync("A");
 
         Assert.Equal(2, report.Written);
     }
 
     [Fact]
-    public async Task ItKeepsGoingPastTheBatchSize()
+    public async Task ItSaysNothingHappenedWhenNobodyWasStanding()
     {
-        _arrivals.For("A",
-            Passage(1_755_500_000, 1_755_500_120),
-            Passage(1_755_500_100, 1_755_500_220),
-            Passage(1_755_500_200, 1_755_500_320),
-            Passage(1_755_500_300, 1_755_500_420),
-            Passage(1_755_500_400, 1_755_500_520));
+        var report = await CollectAsync("A", "B");
+
+        Assert.Equal(0, report.Written);
+        Assert.Equal(0, report.Seen);
+        Assert.Equal(2, report.StopsRead);
+    }
+
+    [Fact]
+    public async Task ItSurvivesTheFleetBeingUnreachable()
+    {
+        _fleet.Break();
 
         var report = await CollectAsync("A");
 
-        Assert.Equal(5, report.Written);
-
-        await using var context = Open();
-        Assert.Equal(5, await context.Arrivals.CountAsync());
+        Assert.Equal(1, report.StopsFailed);
+        Assert.Equal(0, report.Written);
     }
 
-    public void Dispose() => _connection.Dispose();
-
-    private sealed class StubArrivals : ICarrisArrivals
+    public void Dispose()
     {
-        private readonly Dictionary<string, IReadOnlyList<CarrisArrival>> _byStop = [];
-        private readonly HashSet<string> _broken = [];
+        _connection.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
-        public void For(string stopId, params CarrisArrival[] arrivals) => _byStop[stopId] = arrivals;
+    private sealed class StubObserver : IPassageObserver
+    {
+        private IReadOnlyList<ArrivalObservation> _passages = [];
 
-        public void Fail(string stopId) => _broken.Add(stopId);
+        public void Saw(params ArrivalObservation[] passages) => _passages = passages;
 
-        public Task<IReadOnlyList<CarrisArrival>> GetArrivalsAsync(
-            string stopId, CancellationToken cancellationToken)
-        {
-            if (_broken.Contains(stopId))
-            {
-                throw new CarrisFeedException($"stop {stopId} is broken");
-            }
+        public Task<IReadOnlyList<ArrivalObservation>> ObserveAsync(
+            IReadOnlyList<Vehicle> fleet, IReadOnlySet<string> stopIds, CancellationToken cancellationToken) =>
+            Task.FromResult(_passages);
+    }
 
-            return Task.FromResult(_byStop.GetValueOrDefault(stopId, []));
-        }
+    private sealed class StubFleet : ICarrisClient
+    {
+        private bool _broken;
+
+        public void Break() => _broken = true;
+
+        public Task<IReadOnlyList<CarrisVehicle>> GetVehiclesAsync(CancellationToken cancellationToken) =>
+            _broken
+                ? Task.FromException<IReadOnlyList<CarrisVehicle>>(new HttpRequestException("no fleet"))
+                : Task.FromResult<IReadOnlyList<CarrisVehicle>>([]);
     }
 }

@@ -167,12 +167,20 @@ public class OperationalDayTests
     }
 }
 
-public class LineNameTests
+public class WithoutAgencyTests
 {
     [Fact]
     public void StripsTheAgencyOffALineName()
     {
-        Assert.Equal("2753", ScheduleEndpoints.LineName("[BNA17]2753"));
-        Assert.Equal("2753", ScheduleEndpoints.LineName("2753"));
+        Assert.Equal("2753", ScheduleEndpoints.WithoutAgency("[BNA17]2753"));
+        Assert.Equal("2753", ScheduleEndpoints.WithoutAgency("2753"));
+    }
+
+    [Fact]
+    public void StripsItOffAPatternTheOldApiStillHasToRecognise()
+    {
+        Assert.Equal("2769_0_1", ScheduleEndpoints.WithoutAgency("[BNA17]2769_0_1"));
+        Assert.Equal("3701_0_2", ScheduleEndpoints.WithoutAgency("[YA15B]3701_0_2"));
+        Assert.Equal("2769_0_1", ScheduleEndpoints.WithoutAgency("2769_0_1"));
     }
 }

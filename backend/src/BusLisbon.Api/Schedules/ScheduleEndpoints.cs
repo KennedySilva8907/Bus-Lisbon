@@ -41,8 +41,8 @@ public static class ScheduleEndpoints
 
             return Results.Ok(board.Select(entry => new
             {
-                lineId = LineName(entry.LineId),
-                patternId = entry.PatternId,
+                lineId = WithoutAgency(entry.LineId),
+                patternId = WithoutAgency(entry.PatternId),
                 headsign = entry.Headsign,
                 tripId = entry.TripId,
                 vehicleId = entry.VehicleId,
@@ -60,10 +60,10 @@ public static class ScheduleEndpoints
 
     public static readonly TimeSpan AheadWindow = TimeSpan.FromHours(2);
 
-    public static string LineName(string lineId)
+    public static string WithoutAgency(string id)
     {
-        var cut = lineId.LastIndexOf(']');
+        var cut = id.LastIndexOf(']');
 
-        return cut >= 0 && cut < lineId.Length - 1 ? lineId[(cut + 1)..] : lineId;
+        return cut >= 0 && cut < id.Length - 1 ? id[(cut + 1)..] : id;
     }
 }

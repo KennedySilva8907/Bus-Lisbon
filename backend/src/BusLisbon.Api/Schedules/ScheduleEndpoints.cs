@@ -10,6 +10,7 @@ public static class ScheduleEndpoints
             string stopId,
             PatternCatalogue catalogue,
             ITmlArrivals arrivals,
+            Vehicles.VehicleGateway fleet,
             IOptions<TmlOptions> options,
             TimeProvider clock,
             CancellationToken cancellationToken) =>
@@ -37,7 +38,8 @@ public static class ScheduleEndpoints
                 .Select(trip => new LiveEta(trip.TripId, trip.PatternId, trip.VehicleId, trip.EtaUnix))
                 .ToList();
 
-            var board = StopBoard.Build(timetable, etas, now, BehindWindow, AheadWindow);
+            var fleetByTrip = await fleet.GetVehiclesByTripAsync(cancellationToken);
+            var board = StopBoard.Build(timetable, etas, now, BehindWindow, AheadWindow, fleetByTrip);
 
             return Results.Ok(board.Select(entry => new
             {
@@ -49,7 +51,8 @@ public static class ScheduleEndpoints
                 scheduledUnix = entry.ScheduledUnix,
                 estimatedUnix = entry.EstimatedUnix,
                 isPast = entry.IsPast,
-                isRealtime = entry.IsRealtime
+                isRealtime = entry.IsRealtime,
+                tripRunning = entry.TripRunning
             }).ToList());
         });
 

@@ -41,6 +41,22 @@ public sealed class VehicleGateway(
         return snapshot is null ? null : VehicleMatcher.Find(snapshot.All, tripId, number, lineId);
     }
 
+    public async Task<IReadOnlyDictionary<string, string>> GetVehiclesByTripAsync(
+        CancellationToken cancellationToken)
+    {
+        var snapshot = await EnsureFreshAsync(cancellationToken);
+        var byTrip = new Dictionary<string, string>();
+
+        foreach (var vehicle in snapshot?.All ?? [])
+        {
+            var trip = VehicleMatcher.BareTripId(vehicle.TripId);
+
+            if (trip.Length > 0) byTrip[trip] = vehicle.Id;
+        }
+
+        return byTrip;
+    }
+
     public async Task<VehicleGatewayStatus> GetStatusAsync(CancellationToken cancellationToken)
     {
         var snapshot = await EnsureFreshAsync(cancellationToken);

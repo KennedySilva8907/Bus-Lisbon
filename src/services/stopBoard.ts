@@ -8,6 +8,7 @@ export interface BoardEntry {
   estimatedUnix: number;
   isPast: boolean;
   isRealtime: boolean;
+  tripRunning: boolean;
 }
 
 export interface PanelArrival {
@@ -18,6 +19,7 @@ export interface PanelArrival {
   scheduled_arrival_unix: number;
   observed_arrival_unix?: number | null;
   went_by_unix?: number | null;
+  trip_running?: boolean;
   vehicle_id: string;
   pattern_id: string;
 }
@@ -31,7 +33,8 @@ export function toPanelArrivals(board: BoardEntry[]): PanelArrival[] {
     scheduled_arrival_unix: entry.scheduledUnix,
     observed_arrival_unix: entry.isPast && entry.isRealtime ? entry.estimatedUnix : null,
     went_by_unix: entry.isPast ? entry.estimatedUnix || entry.scheduledUnix : null,
-    vehicle_id: entry.isRealtime ? entry.vehicleId : '',
+    trip_running: entry.tripRunning,
+    vehicle_id: entry.tripRunning ? entry.vehicleId : '',
     pattern_id: entry.patternId,
   }));
 }

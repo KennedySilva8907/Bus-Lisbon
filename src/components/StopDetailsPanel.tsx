@@ -1,5 +1,5 @@
 import { useStopETA, type Stop, type ETA } from '../services/api';
-import { describeArrival, describePunctuality, wentByAt, type PunctualityTone } from '../services/arrivals';
+import { describeArrival, describePassage, describePunctuality, wentByAt, type PunctualityTone } from '../services/arrivals';
 import { fromUnixTime } from 'date-fns';
 import { X, Star, ChevronUp } from 'lucide-react';
 import { useRef, useEffect, useState, useMemo } from 'react';
@@ -14,12 +14,16 @@ const PunctualityColour: Record<PunctualityTone, string> = {
   early: 'text-blue-400',
   late: 'text-orange-400',
   onTime: 'text-green-400',
+  running: 'text-carris-yellow',
+  finished: 'text-gray-400',
 };
 
 const PunctualityBackground: Record<PunctualityTone, string> = {
   early: 'bg-blue-400/10',
   late: 'bg-orange-400/10',
   onTime: 'bg-green-400/10',
+  running: 'bg-carris-yellow/10',
+  finished: 'bg-gray-400/10',
 };
 
 interface StopDetailsPanelProps {
@@ -253,10 +257,10 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                       {olderPast.map((eta, i) => {
                         const wentBy = wentByAt(eta) ?? 0;
                         const pastMin = Math.round((nowUnix - wentBy) / 60);
-                        const punctuality = describePunctuality(eta);
-                        const directionLabel = punctuality?.label ?? '';
-                        const directionColor = punctuality ? PunctualityColour[punctuality.tone] : '';
-                        const directionBg = punctuality ? PunctualityBackground[punctuality.tone] : '';
+                        const punctuality = describePunctuality(eta) ?? describePassage(eta);
+                        const directionLabel = punctuality.label;
+                        const directionColor = PunctualityColour[punctuality.tone];
+                        const directionBg = PunctualityBackground[punctuality.tone];
 
                         const canTrack = !!eta.vehicle_id;
                         const isSelected = canTrack && selectedVehicleId === eta.vehicle_id;
@@ -299,10 +303,10 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                   {recentPast.map((eta, i) => {
                     const wentBy = wentByAt(eta) ?? 0;
                     const pastMin = Math.round((nowUnix - wentBy) / 60);
-                    const punctuality = describePunctuality(eta);
-                    const directionLabel = punctuality?.label ?? '';
-                    const directionColor = punctuality ? PunctualityColour[punctuality.tone] : '';
-                    const directionBg = punctuality ? PunctualityBackground[punctuality.tone] : '';
+                    const punctuality = describePunctuality(eta) ?? describePassage(eta);
+                    const directionLabel = punctuality.label;
+                    const directionColor = PunctualityColour[punctuality.tone];
+                    const directionBg = PunctualityBackground[punctuality.tone];
 
                     const canTrack = !!eta.vehicle_id;
                     const isSelected = canTrack && selectedVehicleId === eta.vehicle_id;

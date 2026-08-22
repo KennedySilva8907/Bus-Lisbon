@@ -13,6 +13,7 @@ const entry = (overrides: Partial<BoardEntry> = {}): BoardEntry => ({
   estimatedUnix: now + 300,
   isPast: false,
   isRealtime: true,
+  tripRunning: true,
   ...overrides,
 });
 
@@ -35,7 +36,9 @@ describe('toPanelArrivals', () => {
   });
 
   it('does not offer to follow a departure that has no bus yet', () => {
-    const [arrival] = toPanelArrivals([entry({ isRealtime: false, estimatedUnix: 0 })]);
+    const [arrival] = toPanelArrivals([
+      entry({ isRealtime: false, estimatedUnix: 0, tripRunning: false }),
+    ]);
 
     expect(arrival.vehicle_id).toBe('');
     expect(arrival.estimated_arrival_unix).toBe(0);
@@ -78,5 +81,25 @@ describe('toPanelArrivals and what it will not claim', () => {
     ]);
 
     expect(arrival.vehicle_id).toBe('2548');
+  });
+});
+
+describe('a passage whose bus has stopped running', () => {
+  it('cannot be followed once the trip is off the road', () => {
+    const [arrival] = toPanelArrivals([
+      entry({ isPast: true, isRealtime: false, estimatedUnix: 0, tripRunning: false }),
+    ]);
+
+    expect(arrival.vehicle_id).toBe('');
+    expect(arrival.trip_running).toBe(false);
+  });
+
+  it('can still be followed while the trip is being driven', () => {
+    const [arrival] = toPanelArrivals([
+      entry({ isPast: true, isRealtime: false, estimatedUnix: 0, tripRunning: true, vehicleId: '42|2524' }),
+    ]);
+
+    expect(arrival.vehicle_id).toBe('42|2524');
+    expect(arrival.trip_running).toBe(true);
   });
 });

@@ -10,7 +10,8 @@ public sealed record BoardEntry(
     long EstimatedUnix,
     long EffectiveUnix,
     bool IsPast,
-    bool IsRealtime);
+    bool IsRealtime,
+    bool TripRunning);
 
 public sealed record LiveEta(string TripId, string PatternId, string VehicleId, long EstimatedUnix);
 
@@ -21,7 +22,8 @@ public static class StopBoard
         IReadOnlyList<LiveEta> etas,
         long nowUnix,
         TimeSpan behind,
-        TimeSpan ahead)
+        TimeSpan ahead,
+        IReadOnlyDictionary<string, string>? fleetByTrip = null)
     {
         var byTrip = new Dictionary<string, LiveEta>();
 
@@ -43,20 +45,39 @@ public static class StopBoard
             if (effective < nowUnix - (long)behind.TotalSeconds) continue;
             if (effective > nowUnix + (long)ahead.TotalSeconds) continue;
 
+            var running = OnTheRoad(fleetByTrip, call.TripKeys);
+
             board.Add(new BoardEntry(
                 call.LineId,
                 call.PatternId,
                 call.Headsign,
-                eta?.TripId ?? string.Empty,
-                eta?.VehicleId ?? string.Empty,
+                eta?.TripId ?? call.TripKeys.FirstOrDefault() ?? string.Empty,
+                eta?.VehicleId ?? running ?? string.Empty,
                 call.ScheduledUnix,
                 estimated,
                 effective,
                 effective < nowUnix,
-                estimated != 0));
+                estimated != 0,
+                eta is not null || running is not null));
         }
 
         return [.. board.OrderBy(entry => entry.EffectiveUnix)];
+    }
+
+    private static string? OnTheRoad(
+        IReadOnlyDictionary<string, string>? fleetByTrip, IReadOnlyList<string> tripKeys)
+    {
+        if (fleetByTrip is null) return null;
+
+        foreach (var key in tripKeys)
+        {
+            if (fleetByTrip.TryGetValue(Vehicles.VehicleMatcher.BareTripId(key), out var vehicleId))
+            {
+                return vehicleId;
+            }
+        }
+
+        return null;
     }
 
     private static LiveEta? Matching(

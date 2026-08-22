@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeArrival, describePunctuality, wentByAt } from './arrivals';
+import { describeArrival, describePassage, describePunctuality, wentByAt } from './arrivals';
 import type { ETA } from './api';
 
 const eta = (overrides: Partial<ETA>): ETA => ({
@@ -84,5 +84,17 @@ describe('wentByAt', () => {
 
   it('says nothing for an arrival that has not happened', () => {
     expect(wentByAt(eta({}))).toBeNull();
+  });
+});
+
+describe('describePassage', () => {
+  it('says the bus is still out there', () => {
+    expect(describePassage(eta({ trip_running: true })))
+      .toEqual({ label: 'Ainda em percurso', tone: 'running' });
+  });
+
+  it('says the trip is over', () => {
+    expect(describePassage(eta({ trip_running: false })))
+      .toEqual({ label: 'Terminou o percurso', tone: 'finished' });
   });
 });

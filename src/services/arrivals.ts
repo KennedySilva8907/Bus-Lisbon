@@ -8,7 +8,7 @@ export interface ArrivalDescription {
   label: string;
 }
 
-export type PunctualityTone = 'early' | 'late' | 'onTime';
+export type PunctualityTone = 'early' | 'late' | 'onTime' | 'finished' | 'running';
 
 export interface Punctuality {
   label: string;
@@ -27,6 +27,12 @@ export function describePunctuality(eta: ETA): Punctuality | null {
   if (delay > LateBy) return { label: `+${Math.round(delay / 60)}min`, tone: 'late' };
 
   return { label: 'Pontual', tone: 'onTime' };
+}
+
+export function describePassage(eta: ETA): Punctuality {
+  return eta.trip_running
+    ? { label: 'Ainda em percurso', tone: 'running' }
+    : { label: 'Terminou o percurso', tone: 'finished' };
 }
 
 export function wentByAt(eta: ETA): number | null {

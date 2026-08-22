@@ -41,7 +41,10 @@ jobs:
 
       - name: Check the shape of every payload
         id: shape
+        shell: bash
         run: |
+          set -o pipefail
+          echo "full run: $FULL"
           if [ "$FULL" = "true" ]; then
             node scripts/api-shape.mjs 2>&1 | tee shape.log
           else
@@ -51,7 +54,10 @@ jobs:
       - name: Check the contract the app relies on
         id: contract
         if: env.FULL == 'true' && always()
-        run: node scripts/api-contract-check.mjs 2>&1 | tee contract.log
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/api-contract-check.mjs 2>&1 | tee contract.log
 
       - name: Say what moved
         if: failure()

@@ -91,19 +91,27 @@ the source.
         |  service worker + push    |
         +------+-------------+------+
                |             |
-   stops, patterns,          |  one bus, alerts, ranking
-   shapes (direct)           |  + SignalR stream
+   stops, patterns,          |  arrivals, one bus, alerts,
+   shapes (direct)           |  ranking + SignalR stream
                |             |
                v             v
    +-----------------+   +--------------------------------+
    | Carris public   |   | BusLisbon.Api                  |
    | API             |<--| Azure Container Apps, scale-to-0|
-   +-----------------+   |   /api/vehicles/{id}           |
-               ^         |   /api/vehicles/by-line/{id}   |
-               |         |   /api/alerts                  |
+   | stops, shapes,  |   |   /api/arrivals/by-stop/{id}   |
+   | fleet positions |   |   /api/vehicles/{id}           |
+   +-----------------+   |   /api/vehicles/by-trip/{id}   |
+               ^         |   /api/alerts                  |
                |         |   /api/lines/reliability       |
                |         |   /hubs/vehicles  (SignalR)    |
-               |         +----------------+---------------+
+               |         +---+------------+---------------+
+               |             |            |
+               |   +---------v--------+   |
+               |   | TML GO hub       |   |
+               |   | network, the     |   |
+               |   | timetable, live  |   |
+               |   | arrival times    |   |
+               |   +------------------+   |
                |                          |
                |                  +-------+--------+
                |                  |                |
@@ -117,7 +125,8 @@ the source.
    +-----------+------------------+----------------+-------+
    | Container Apps Jobs (cron)                            |
    |   AlertJob       every minute: due alerts -> web-push |
-   |   CollectionJob  nightly: passages -> SQL -> ranking  |
+   |   CollectionJob  through the day: buses standing at a |
+   |                  stop -> SQL -> ranking               |
    +-------------------------------------------------------+
 ```
 
@@ -165,9 +174,17 @@ would win most of that back and is not done yet.
 
 ## Things that were harder than they looked
 
-**Carris returns the whole service day for a stop, past arrivals included.** The
-alert check has to skip what already happened and take the next future one,
-otherwise it decides the bus went by hours ago and cancels the alert.
+**The arrivals board is built from the timetable, not from the estimates.** The
+day's scheduled calls come first and a live estimate is laid over the ones that
+have a bus. Building it the other way round fills the stop with ghosts, because
+the estimate service keeps projecting from a vehicle's last known position long
+after it went by.
+
+**Nobody publishes the time a bus actually passed any more.** The old feed had
+that field and the new one does not, because the arrival row for a stop
+disappears about two minutes before the bus gets there. The panel says nothing
+about punctuality for a passage it did not watch, and the collection reads
+`STOPPED_AT` off the fleet instead, which is a measurement.
 
 **Buses run past midnight.** The GTFS feed writes those trips as `24:34:02`,
 not `00:34:02` the next day. Naive parsing put the first observed passages a day
@@ -204,7 +221,8 @@ later, so the same code looks fine on one theme and broken on the other.
 | Push | web-push with VAPID, no third-party service |
 | Hosting | Vercel for the app, Azure Container Apps for the API |
 | Tests | Vitest on the front, xUnit on the back |
-| Source of truth | api.carrismetropolitana.pt, public, no key |
+| Stops, shapes, fleet | api.carrismetropolitana.pt, public, no key |
+| Network, timetable, arrivals | go.tmlmobilidade.pt, public, no key |
 
 ---
 

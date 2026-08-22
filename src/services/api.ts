@@ -48,6 +48,7 @@ export interface ETA {
   estimated_arrival_unix: number;
   scheduled_arrival_unix: number;
   observed_arrival_unix?: number | null;
+  went_by_unix?: number | null;
   vehicle_id: string;
   pattern_id: string;
 }

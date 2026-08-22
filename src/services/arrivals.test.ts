@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeArrival } from './arrivals';
+import { describeArrival, describePunctuality, wentByAt } from './arrivals';
 import type { ETA } from './api';
 
 const eta = (overrides: Partial<ETA>): ETA => ({
@@ -41,5 +41,48 @@ describe('describeArrival', () => {
 
   it('calls an arrival scheduled when the estimate only repeats the timetable', () => {
     expect(describeArrival(eta({ vehicle_id: '' })).state).toBe('scheduled');
+  });
+});
+
+describe('describePunctuality', () => {
+  const past = (overrides: Partial<ETA>): ETA => eta({
+    scheduled_arrival_unix: 1787340000,
+    ...overrides,
+  });
+
+  it('says nothing about a passage nobody saw', () => {
+    expect(describePunctuality(past({ observed_arrival_unix: null }))).toBeNull();
+    expect(describePunctuality(past({}))).toBeNull();
+  });
+
+  it('calls a bus that went by early Adiantado', () => {
+    expect(describePunctuality(past({ observed_arrival_unix: 1787340000 - 180 })))
+      .toEqual({ label: 'Adiantado', tone: 'early' });
+  });
+
+  it('gives the minutes for a bus that went by late', () => {
+    expect(describePunctuality(past({ observed_arrival_unix: 1787340000 + 300 })))
+      .toEqual({ label: '+5min', tone: 'late' });
+  });
+
+  it('calls the rest Pontual', () => {
+    expect(describePunctuality(past({ observed_arrival_unix: 1787340000 })))
+      .toEqual({ label: 'Pontual', tone: 'onTime' });
+    expect(describePunctuality(past({ observed_arrival_unix: 1787340000 + 90 })))
+      .toEqual({ label: 'Pontual', tone: 'onTime' });
+  });
+});
+
+describe('wentByAt', () => {
+  it('uses the time the board says it went by', () => {
+    expect(wentByAt(eta({ went_by_unix: 1787340111, observed_arrival_unix: 1787340222 }))).toBe(1787340111);
+  });
+
+  it('falls back to the observed time when the board did not say', () => {
+    expect(wentByAt(eta({ observed_arrival_unix: 1787340222 }))).toBe(1787340222);
+  });
+
+  it('says nothing for an arrival that has not happened', () => {
+    expect(wentByAt(eta({}))).toBeNull();
   });
 });

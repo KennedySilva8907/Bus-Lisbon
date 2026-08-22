@@ -26,20 +26,12 @@ describe('toPanelArrivals', () => {
     expect(arrival.observed_arrival_unix).toBeNull();
   });
 
-  it('turns a past entry into a passage nobody can follow', () => {
+  it('turns a past entry into a passage, still worth following', () => {
     const [arrival] = toPanelArrivals([entry({ isPast: true, estimatedUnix: now - 600 })]);
 
     expect(arrival.observed_arrival_unix).toBe(now - 600);
     expect(arrival.estimated_arrival_unix).toBe(0);
-    expect(arrival.vehicle_id).toBe('');
-  });
-
-  it('falls back to the timetable time for a passage with no estimate', () => {
-    const [arrival] = toPanelArrivals([
-      entry({ isPast: true, isRealtime: false, estimatedUnix: 0, scheduledUnix: now - 900 }),
-    ]);
-
-    expect(arrival.observed_arrival_unix).toBe(now - 900);
+    expect(arrival.vehicle_id).toBe('1257');
   });
 
   it('does not offer to follow a departure that has no bus yet', () => {
@@ -58,5 +50,33 @@ describe('toPanelArrivals', () => {
     const board = [entry({ lineId: '1' }), entry({ lineId: '2' }), entry({ lineId: '3' })];
 
     expect(toPanelArrivals(board).map(a => a.line_id)).toEqual(['1', '2', '3']);
+  });
+});
+
+describe('toPanelArrivals and what it will not claim', () => {
+  it('gives no observed time to a passage that had no estimate', () => {
+    const [arrival] = toPanelArrivals([
+      entry({ isPast: true, isRealtime: false, estimatedUnix: 0, scheduledUnix: now - 900 }),
+    ]);
+
+    expect(arrival.observed_arrival_unix).toBeNull();
+    expect(arrival.went_by_unix).toBe(now - 900);
+  });
+
+  it('gives an observed time only when the bus was actually seen', () => {
+    const [arrival] = toPanelArrivals([
+      entry({ isPast: true, isRealtime: true, estimatedUnix: now - 600, scheduledUnix: now - 900 }),
+    ]);
+
+    expect(arrival.observed_arrival_unix).toBe(now - 600);
+    expect(arrival.went_by_unix).toBe(now - 600);
+  });
+
+  it('lets a bus that went by be followed', () => {
+    const [arrival] = toPanelArrivals([
+      entry({ isPast: true, isRealtime: true, estimatedUnix: now - 120, vehicleId: '2548' }),
+    ]);
+
+    expect(arrival.vehicle_id).toBe('2548');
   });
 });

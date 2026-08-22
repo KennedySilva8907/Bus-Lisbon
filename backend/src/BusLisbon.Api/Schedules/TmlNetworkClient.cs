@@ -98,6 +98,7 @@ public sealed class TmlNetworkClient(HttpClient http) : ITmlNetwork
         });
 
         services.AddSingleton<PatternCatalogue>();
+        services.AddScoped<StopBoardService>();
 
         return services;
     }

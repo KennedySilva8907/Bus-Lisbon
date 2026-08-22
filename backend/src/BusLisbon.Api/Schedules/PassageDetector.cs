@@ -1,6 +1,6 @@
 namespace BusLisbon.Api.Schedules;
 
-public sealed record ApproachingTrip(string TripId, string PatternId, string LineId, long EtaUnix);
+public sealed record ApproachingTrip(string TripId, string PatternId, string LineId, string VehicleId, long EtaUnix);
 
 public sealed record ObservedPassage(
     string TripId,

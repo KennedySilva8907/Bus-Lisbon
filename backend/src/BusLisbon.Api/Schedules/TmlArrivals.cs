@@ -12,6 +12,9 @@ public sealed class TmlArrival
 
     [JsonPropertyName("eta_seconds")]
     public double? EtaSeconds { get; set; }
+
+    [JsonPropertyName("vehicle_id")]
+    public string? VehicleId { get; set; }
 }
 
 public sealed record TripParts(string LineId, string PatternId, string AgencyPatternId);
@@ -68,7 +71,8 @@ public sealed partial class TmlArrivalsClient(HttpClient http) : ITmlArrivals
             if (arrival.EtaSeconds is not { } seconds || !double.IsFinite(seconds)) continue;
 
             approaching[arrival.TripId] = new ApproachingTrip(
-                arrival.TripId, trip.AgencyPatternId, trip.LineId, nowUnix + (long)Math.Round(seconds));
+                arrival.TripId, trip.AgencyPatternId, trip.LineId, arrival.VehicleId ?? string.Empty,
+                nowUnix + (long)Math.Round(seconds));
         }
 
         return approaching;

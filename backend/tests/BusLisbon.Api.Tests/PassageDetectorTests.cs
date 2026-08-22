@@ -10,7 +10,7 @@ public class PassageDetectorTests
         trips.ToDictionary(trip => trip.TripId);
 
     private static ApproachingTrip Trip(string id, long secondsAway) =>
-        new(id, "[BNA17]2753_0_1", "2753", Now + secondsAway);
+        new(id, "[BNA17]2753_0_1", "2753", "1257", Now + secondsAway);
 
     [Fact]
     public void ABusThatWasAboutToArriveAndDisappearedHasPassed()

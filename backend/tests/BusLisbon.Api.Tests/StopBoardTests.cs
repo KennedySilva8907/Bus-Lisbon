@@ -14,7 +14,7 @@ public class StopBoardTests
         new("2753", "[BNA17]2753_0_1", "Milharado", departure, Now + secondsAway, last);
 
     private static LiveEta Eta(string departure = "1835", long secondsAway = 300) =>
-        new($"[0277F][BNA17]2753_0_1|1|3|{departure}", "[BNA17]2753_0_1", Now + secondsAway);
+        new($"[0277F][BNA17]2753_0_1|1|3|{departure}", "[BNA17]2753_0_1", "1257", Now + secondsAway);
 
     private static IReadOnlyList<BoardEntry> Build(
         IReadOnlyList<ScheduledCall> timetable, IReadOnlyList<LiveEta> etas) =>

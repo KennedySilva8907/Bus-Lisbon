@@ -5,13 +5,14 @@ public sealed record BoardEntry(
     string PatternId,
     string Headsign,
     string TripId,
+    string VehicleId,
     long ScheduledUnix,
     long EstimatedUnix,
     long EffectiveUnix,
     bool IsPast,
     bool IsRealtime);
 
-public sealed record LiveEta(string TripId, string PatternId, long EstimatedUnix);
+public sealed record LiveEta(string TripId, string PatternId, string VehicleId, long EstimatedUnix);
 
 public static class StopBoard
 {
@@ -48,6 +49,7 @@ public static class StopBoard
                 call.PatternId,
                 call.Headsign,
                 eta?.TripId ?? string.Empty,
+                eta?.VehicleId ?? string.Empty,
                 call.ScheduledUnix,
                 estimated,
                 effective,

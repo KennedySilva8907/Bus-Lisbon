@@ -74,7 +74,7 @@ public static class ScheduleEndpoints
 
             var live = await arrivals.GetApproachingAsync(stopId, now, cancellationToken);
             var etas = live.Values
-                .Select(trip => new LiveEta(trip.TripId, trip.PatternId, trip.EtaUnix))
+                .Select(trip => new LiveEta(trip.TripId, trip.PatternId, trip.VehicleId, trip.EtaUnix))
                 .ToList();
 
             var board = StopBoard.Build(timetable, etas, now, BehindWindow, AheadWindow);
@@ -85,6 +85,7 @@ public static class ScheduleEndpoints
                 patternId = entry.PatternId,
                 headsign = entry.Headsign,
                 tripId = entry.TripId,
+                vehicleId = entry.VehicleId,
                 scheduledUnix = entry.ScheduledUnix,
                 estimatedUnix = entry.EstimatedUnix,
                 isPast = entry.IsPast,

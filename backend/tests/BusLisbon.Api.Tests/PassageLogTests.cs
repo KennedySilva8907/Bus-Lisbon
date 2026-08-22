@@ -116,7 +116,7 @@ public class PassageLogTests
         var (log, _) = Fresh();
         var trips = new Dictionary<string, ApproachingTrip>
         {
-            ["a"] = new("a", "[BNA17]2753_0_1", "2753", 1787340000)
+            ["a"] = new("a", "[BNA17]2753_0_1", "2753", "1257", 1787340000)
         };
 
         log.Remember("110785", trips);

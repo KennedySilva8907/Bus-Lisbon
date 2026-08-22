@@ -2,8 +2,7 @@ import { useMemo } from 'react';
 import useSWR from 'swr';
 import { GATEWAY_BASE, backendIsAwake, isFleetVehicleId, isGatewayEnabled, toVehicle, gatewayVehicleUrl, type GatewayVehicleResponse } from './gateway';
 import { freshestVehicle, useVehicleStream } from './realtime';
-import { ETA_BASE_URL, readFeed, type FeedEta } from './etaFeed';
-import { mergeArrivals, type StopPassage, type StopSchedule } from './mergeArrivals';
+import { toPanelArrivals, type BoardEntry } from './stopBoard';
 
 const API_BASE_URL = 'https://api.carrismetropolitana.pt';
 
@@ -187,39 +186,15 @@ const lastETAFetchAt = new Map<string, number>();
 
 const NO_ETAS: ETA[] = [];
 
-const etaFetcher = async (url: string): Promise<FeedEta[]> => {
-  const res = await fetch(url);
-  const json = await res.json();
-  const rows = Array.isArray(json) ? json : (json?.data ?? []);
 
-  return readFeed(rows, Math.floor(Date.now() / 1000));
-};
-
-function headsignsFor(patternIds: string[]) {
-  return Promise.all(
-    patternIds.map(async id => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/patterns/${id}`);
-
-        if (!res.ok) return [id, ''] as const;
-
-        const pattern = await res.json();
-
-        return [id, (pattern?.headsign as string | undefined) || ''] as const;
-      } catch {
-        return [id, ''] as const;
-      }
-    })
-  ).then(pairs => Object.fromEntries(pairs) as Record<string, string>);
-}
 
 export function useStopETA(stopId: string | null) {
-  const key = stopId ? `${ETA_BASE_URL}/realtime/eta/by-stop/${stopId}` : null;
-  const { data: feed, error, isLoading } = useSWR<FeedEta[]>(
+  const key = stopId && isGatewayEnabled() ? `${GATEWAY_BASE}/api/arrivals/by-stop/${stopId}` : null;
+  const { data: board, error, isLoading } = useSWR<BoardEntry[]>(
     key,
-    etaFetcher,
+    fetcher,
     {
-      refreshInterval: 8000,
+      refreshInterval: 15000,
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
       keepPreviousData: true,
@@ -229,37 +204,11 @@ export function useStopETA(stopId: string | null) {
     }
   );
 
-  const patternIds = useMemo(() => [...new Set((feed || []).map(e => e.patternId))].sort(), [feed]);
-
-  const { data: headsigns } = useSWR(
-    patternIds.length ? ['headsigns', patternIds.join(',')] : null,
-    () => headsignsFor(patternIds),
-    { revalidateOnFocus: false, revalidateIfStale: false, dedupingInterval: 86400000 }
-  );
-
-  const { data: timetable } = useSWR<StopSchedule[]>(
-    stopId && isGatewayEnabled() ? `${GATEWAY_BASE}/api/schedules/by-stop/${stopId}` : null,
-    fetcher,
-    { refreshInterval: 300000, revalidateOnFocus: false, keepPreviousData: true }
-  );
-
-  const { data: passages } = useSWR<StopPassage[]>(
-    stopId && isGatewayEnabled() ? `${GATEWAY_BASE}/api/passages/by-stop/${stopId}` : null,
-    fetcher,
-    { refreshInterval: 30000, revalidateOnFocus: true, keepPreviousData: true }
-  );
-
   const data = useMemo<ETA[]>(
-    () =>
-      (feed && feed.length) || (timetable && timetable.length) || (passages && passages.length)
-        ? mergeArrivals(feed || [], timetable || [], headsigns || {}, passages || [])
-        : NO_ETAS,
-    [feed, timetable, headsigns, passages]
+    () => (board && board.length ? toPanelArrivals(board) : NO_ETAS),
+    [board]
   );
 
-  // iOS Safari pauses background timers, so a "3min" prediction may have been
-  // computed minutes ago. Null until the first fetch lands — the consumer is
-  // expected to treat that as "fresh" rather than infinitely stale.
   const lastUpdated = (key && lastETAFetchAt.get(key)) || null;
 
   return { etas: data, lastUpdated, isLoading, isError: error };

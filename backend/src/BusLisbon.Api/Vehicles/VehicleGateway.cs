@@ -33,6 +33,14 @@ public sealed class VehicleGateway(
             && (string.IsNullOrEmpty(patternId) || vehicle.PatternId == patternId));
     }
 
+    public async Task<Vehicle?> GetVehicleByTripAsync(
+        string tripId, string? number, string? lineId, CancellationToken cancellationToken)
+    {
+        var snapshot = await EnsureFreshAsync(cancellationToken);
+
+        return snapshot is null ? null : VehicleMatcher.Find(snapshot.All, tripId, number, lineId);
+    }
+
     public async Task<VehicleGatewayStatus> GetStatusAsync(CancellationToken cancellationToken)
     {
         var snapshot = await EnsureFreshAsync(cancellationToken);

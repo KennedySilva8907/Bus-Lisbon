@@ -148,3 +148,19 @@ describe('departureTag', () => {
     expect(departureTag(undefined)).toBe('');
   });
 });
+
+describe('a bus that is running late', () => {
+  const now = 1787340000;
+
+  it('is still shown five minutes after it was due', () => {
+    expect(readFeed([{ trip_id: '[BNA17]2769_0_1|1|3|2530', eta_seconds: -319 }], now)).toHaveLength(1);
+  });
+
+  it('is still shown ten minutes after it was due', () => {
+    expect(readFeed([{ trip_id: '[BNA17]2769_0_1|1|3|2530', eta_seconds: -600 }], now)).toHaveLength(1);
+  });
+
+  it('is dropped once it is absurdly overdue', () => {
+    expect(readFeed([{ trip_id: '[BNA17]2769_0_1|1|3|2530', eta_seconds: -1800 }], now)).toHaveLength(0);
+  });
+});

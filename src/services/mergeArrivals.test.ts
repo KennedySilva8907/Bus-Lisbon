@@ -5,6 +5,7 @@ import type { FeedEta } from './etaFeed';
 const now = 1787340000;
 
 const bus = (overrides: Partial<FeedEta> = {}): FeedEta => ({
+  tripId: '[0277F][BNA17]2753_0_1|150|3|1835',
   lineId: '2753',
   patternId: '2753_0_1',
   agencyPatternId: '[BNA17]2753_0_1',

@@ -3,7 +3,7 @@ import useSWR from 'swr';
 import { GATEWAY_BASE, backendIsAwake, isFleetVehicleId, isGatewayEnabled, toVehicle, gatewayVehicleUrl, type GatewayVehicleResponse } from './gateway';
 import { freshestVehicle, useVehicleStream } from './realtime';
 import { ETA_BASE_URL, readFeed, type FeedEta } from './etaFeed';
-import { mergeArrivals, type StopSchedule } from './mergeArrivals';
+import { mergeArrivals, type StopPassage, type StopSchedule } from './mergeArrivals';
 
 const API_BASE_URL = 'https://api.carrismetropolitana.pt';
 
@@ -43,6 +43,7 @@ export interface Vehicle {
 }
 
 export interface ETA {
+  trip_id?: string;
   line_id: string;
   headsign: string;
   estimated_arrival_unix: number;
@@ -116,10 +117,10 @@ export function pickFromFleet(
   return null;
 }
 
-export function useSingleVehicle(vehicleId: string | null, lineId?: string | null, patternId?: string | null) {
+export function useSingleVehicle(vehicleId: string | null, lineId?: string | null, patternId?: string | null, tripId?: string | null) {
   const shouldFetch = !!(vehicleId || lineId);
   const gatewayUrl = isGatewayEnabled()
-    ? gatewayVehicleUrl(GATEWAY_BASE, vehicleId, lineId, patternId)
+    ? gatewayVehicleUrl(GATEWAY_BASE, vehicleId, lineId, patternId, tripId)
     : null;
 
   const trackedId = isFleetVehicleId(vehicleId) ? vehicleId : null;
@@ -242,12 +243,18 @@ export function useStopETA(stopId: string | null) {
     { refreshInterval: 300000, revalidateOnFocus: false, keepPreviousData: true }
   );
 
+  const { data: passages } = useSWR<StopPassage[]>(
+    stopId && isGatewayEnabled() ? `${GATEWAY_BASE}/api/passages/by-stop/${stopId}` : null,
+    fetcher,
+    { refreshInterval: 30000, revalidateOnFocus: true, keepPreviousData: true }
+  );
+
   const data = useMemo<ETA[]>(
     () =>
-      (feed && feed.length) || (timetable && timetable.length)
-        ? mergeArrivals(feed || [], timetable || [], headsigns || {})
+      (feed && feed.length) || (timetable && timetable.length) || (passages && passages.length)
+        ? mergeArrivals(feed || [], timetable || [], headsigns || {}, passages || [])
         : NO_ETAS,
-    [feed, timetable, headsigns]
+    [feed, timetable, headsigns, passages]
   );
 
   // iOS Safari pauses background timers, so a "3min" prediction may have been

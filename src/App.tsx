@@ -12,6 +12,7 @@ function App() {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [isPanelExpanded, setIsPanelExpanded] = useState(true);
   const [isDarkMap, setIsDarkMap] = useState(() => {
     try {
@@ -23,7 +24,7 @@ function App() {
   });
   const { favorites, toggle: toggleFavorite, isFavorite } = useFavorites();
   const route = usePattern(selectedPatternId);
-  const { vehicle } = useSingleVehicle(selectedVehicleId, selectedLineId, selectedPatternId);
+  const { vehicle } = useSingleVehicle(selectedVehicleId, selectedLineId, selectedPatternId, selectedTripId);
 
   // Notification-click target: a stop the user came in to see. Resolved once
   // stops finish loading (we get just the id from the URL or SW message).
@@ -165,7 +166,7 @@ function App() {
           onToggleExpand={() => setIsPanelExpanded(!isPanelExpanded)}
           onClose={() => { setSelectedStop(null); setSelectedVehicleId(null); setSelectedPatternId(null); setSelectedLineId(null); }}
           selectedVehicleId={selectedVehicleId}
-          onVehicleSelect={(vid, pid, lid) => { setSelectedVehicleId(vid); setSelectedPatternId(pid || null); setSelectedLineId(lid || null); }}
+          onVehicleSelect={(vid, pid, lid, tid) => { setSelectedVehicleId(vid); setSelectedPatternId(pid || null); setSelectedLineId(lid || null); setSelectedTripId(tid || null); }}
           isFavorite={selectedStop ? isFavorite(selectedStop.id) : false}
           onToggleFavorite={() => selectedStop && toggleFavorite(selectedStop.id)}
         />

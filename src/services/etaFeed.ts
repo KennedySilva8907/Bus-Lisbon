@@ -1,6 +1,6 @@
 export const ETA_BASE_URL = 'https://go.tmlmobilidade.pt/hub/api/v1';
 
-export const ETA_MAX_AGE_SECONDS = 300;
+export const ETA_MAX_AGE_SECONDS = 900;
 
 export interface RawEta {
   trip_id?: string;
@@ -51,6 +51,7 @@ export function readEtaAt(value: string | number | undefined | null): number | n
 }
 
 export interface FeedEta {
+  tripId: string;
   lineId: string;
   patternId: string;
   agencyPatternId: string;
@@ -80,6 +81,7 @@ export function toFeedEta(raw: RawEta, nowUnix: number): FeedEta | null {
   if (!trip || arrival === null) return null;
 
   return {
+    tripId: String(raw.trip_id ?? ''),
     lineId: trip.lineId,
     patternId: trip.patternId,
     agencyPatternId: trip.agencyPatternId,

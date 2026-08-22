@@ -88,7 +88,16 @@ public sealed class TmlNetworkClient(HttpClient http) : ITmlNetwork
                 });
             });
 
+        services.AddHttpClient<ITmlArrivals, TmlArrivalsClient>((provider, client) =>
+        {
+            var options = provider.GetRequiredService<IOptions<TmlOptions>>().Value;
+
+            client.BaseAddress = new Uri(options.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(20);
+        });
+
         services.AddSingleton<PatternCatalogue>();
+        services.AddSingleton<PassageLog>();
 
         return services;
     }

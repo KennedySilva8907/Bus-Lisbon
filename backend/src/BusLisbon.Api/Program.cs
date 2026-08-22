@@ -26,6 +26,7 @@ UpstashKeyValueStore.AddUpstash(builder.Services, builder.Configuration);
 builder.Services.AddScoped<AlertStore>();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<CarrisPoller>();
+builder.Services.AddHostedService<PassageWatcher>();
 
 var app = builder.Build();
 

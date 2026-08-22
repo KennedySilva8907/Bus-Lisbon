@@ -17,10 +17,13 @@ public static class ScheduleEndpoints
             string stopId,
             int? minutes,
             PatternCatalogue catalogue,
+            PassageLog passages,
             IOptions<TmlOptions> options,
             TimeProvider clock,
             CancellationToken cancellationToken) =>
         {
+            passages.Wanted(stopId);
+
             var zone = TimeZoneInfo.FindSystemTimeZoneById(options.Value.TimeZone);
             var now = clock.GetUtcNow().ToUnixTimeSeconds();
             var window = Window(minutes);
@@ -44,6 +47,20 @@ public static class ScheduleEndpoints
             }
 
             return Results.Ok(calls.OrderBy(call => call.ScheduledUnix).ToList());
+        });
+
+        routes.MapGet("/api/passages/by-stop/{stopId}", (string stopId, PassageLog passages) =>
+        {
+            passages.Wanted(stopId);
+
+            return Results.Ok(passages.At(stopId).Select(passage => new
+            {
+                lineId = LineName(passage.LineId),
+                patternId = passage.PatternId,
+                headsign = passage.Headsign,
+                observedUnix = passage.ObservedUnix,
+                scheduledUnix = passage.ScheduledUnix
+            }).ToList());
         });
 
         return routes;

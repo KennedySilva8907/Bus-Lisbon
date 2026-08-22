@@ -16,7 +16,7 @@ interface StopDetailsPanelProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   selectedVehicleId?: string | null;
-  onVehicleSelect?: (vehicleId: string | null, patternId?: string, lineId?: string) => void;
+  onVehicleSelect?: (vehicleId: string | null, patternId?: string, lineId?: string, tripId?: string) => void;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
 }
@@ -254,7 +254,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                         return (
                           <div
                             key={`past-old-${eta.vehicle_id || eta.line_id}-${i}`}
-                            onClick={canTrack && onVehicleSelect ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id) : undefined}
+                            onClick={canTrack && onVehicleSelect ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id, eta.trip_id) : undefined}
                             className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
                               isSelected
                                 ? 'bg-carris-yellow/10 border-carris-yellow/40 ring-1 ring-carris-yellow/30 opacity-90'
@@ -302,7 +302,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                     return (
                       <div
                         key={`past-recent-${eta.vehicle_id || eta.line_id}-${i}`}
-                        onClick={canTrack && onVehicleSelect ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id) : undefined}
+                        onClick={canTrack && onVehicleSelect ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id, eta.trip_id) : undefined}
                         className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
                           isSelected
                             ? 'bg-carris-yellow/10 border-carris-yellow/40 ring-1 ring-carris-yellow/30 opacity-90'
@@ -387,7 +387,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                     <div
                       key={`future-${eta.vehicle_id || eta.line_id}-${i}`}
                       onClick={hasVehicle && onVehicleSelect
-                        ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id)
+                        ? () => onVehicleSelect(eta.vehicle_id, eta.pattern_id, eta.line_id, eta.trip_id)
                         : undefined}
                       className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all ${
                         hasVehicle ? 'cursor-pointer active:scale-[0.98]' : ''

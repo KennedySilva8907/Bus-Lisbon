@@ -8,11 +8,21 @@ export interface StopSchedule {
   scheduledUnix: number;
 }
 
+export interface StopPassage {
+  lineId: string;
+  patternId: string;
+  headsign: string;
+  observedUnix: number;
+  scheduledUnix: number;
+}
+
 export interface MergedArrival {
+  trip_id: string;
   line_id: string;
   headsign: string;
   estimated_arrival_unix: number;
   scheduled_arrival_unix: number;
+  observed_arrival_unix?: number | null;
   vehicle_id: string;
   pattern_id: string;
 }
@@ -24,7 +34,8 @@ function keyOf(patternId: string, departure: string): string {
 export function mergeArrivals(
   live: FeedEta[],
   scheduled: StopSchedule[],
-  headsigns: Record<string, string>
+  headsigns: Record<string, string>,
+  passages: StopPassage[] = []
 ): MergedArrival[] {
   const timetable = new Map<string, StopSchedule>();
 
@@ -42,6 +53,7 @@ export function mergeArrivals(
     running.add(key);
 
     merged.push({
+      trip_id: bus.tripId,
       line_id: bus.lineId,
       headsign: call?.headsign || headsigns[bus.patternId] || '',
       estimated_arrival_unix: bus.estimatedArrivalUnix,
@@ -55,12 +67,26 @@ export function mergeArrivals(
     if (running.has(keyOf(call.patternId, call.departure))) continue;
 
     merged.push({
+      trip_id: '',
       line_id: call.lineId,
       headsign: call.headsign,
       estimated_arrival_unix: 0,
       scheduled_arrival_unix: call.scheduledUnix,
       vehicle_id: '',
       pattern_id: call.patternId,
+    });
+  }
+
+  for (const passage of passages) {
+    merged.push({
+      trip_id: '',
+      line_id: passage.lineId,
+      headsign: passage.headsign,
+      estimated_arrival_unix: 0,
+      scheduled_arrival_unix: passage.scheduledUnix,
+      observed_arrival_unix: passage.observedUnix,
+      vehicle_id: '',
+      pattern_id: passage.patternId,
     });
   }
 

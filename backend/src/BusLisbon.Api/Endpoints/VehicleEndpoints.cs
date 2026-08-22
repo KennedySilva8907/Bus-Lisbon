@@ -40,6 +40,32 @@ public static class VehicleEndpoints
                 : Results.Ok(new VehicleResponse(vehicle, age, status.Stale));
         });
 
+        vehicles.MapGet("/by-trip/{tripId}", async (
+            string tripId,
+            string? number,
+            string? lineId,
+            VehicleGateway gateway,
+            VehicleDemand demand,
+            CancellationToken cancellationToken) =>
+        {
+            demand.Register();
+
+            var status = await gateway.GetStatusAsync(cancellationToken);
+
+            if (status.AgeSeconds is not { } age)
+            {
+                return Results.Problem(
+                    "The vehicle feed has not been read successfully yet",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            var vehicle = await gateway.GetVehicleByTripAsync(tripId, number, lineId, cancellationToken);
+
+            return vehicle is null
+                ? Results.NotFound()
+                : Results.Ok(new VehicleResponse(vehicle, age, status.Stale));
+        });
+
         vehicles.MapGet("/{id}", async (
             string id,
             VehicleGateway gateway,

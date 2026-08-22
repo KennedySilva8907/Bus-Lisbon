@@ -48,9 +48,19 @@ export function gatewayVehicleUrl(
   base: string,
   vehicleId: string | null,
   lineId: string | null | undefined,
-  patternId: string | null | undefined
+  patternId: string | null | undefined,
+  tripId?: string | null
 ): string | null {
   if (isFleetVehicleId(vehicleId)) return `${base}/api/vehicles/${encodeURIComponent(vehicleId as string)}`;
+
+  if (tripId) {
+    const asked = new URLSearchParams();
+
+    if (vehicleId) asked.set('number', vehicleId);
+    if (lineId) asked.set('lineId', lineId);
+
+    return `${base}/api/vehicles/by-trip/${encodeURIComponent(tripId)}?${asked.toString()}`;
+  }
   if (!lineId) return null;
 
   const path = `${base}/api/vehicles/by-line/${encodeURIComponent(lineId)}`;

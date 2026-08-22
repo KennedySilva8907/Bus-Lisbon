@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Observations\sample-stops.json" />
+    <EmbeddedResource Include="Schedules\stop-id-map.json" />
   </ItemGroup>
 
 </Project>

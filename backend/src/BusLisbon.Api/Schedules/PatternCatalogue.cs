@@ -15,6 +15,17 @@ public sealed class PatternCatalogue(
 
     private DateTimeOffset stopsLoadedAt = DateTimeOffset.MinValue;
 
+    public async Task<string?> NetworkStopIdAsync(string stopId, CancellationToken cancellationToken)
+    {
+        await EnsureStopsAsync(cancellationToken);
+
+        if (stops.ContainsKey(stopId)) return stopId;
+
+        var mapped = StopIdMap.NetworkIdFor(stopId);
+
+        return mapped is not null && stops.ContainsKey(mapped) ? mapped : null;
+    }
+
     public async Task<IReadOnlyList<string>> PatternIdsForAsync(
         string stopId, CancellationToken cancellationToken)
     {

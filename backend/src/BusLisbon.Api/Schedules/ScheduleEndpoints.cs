@@ -14,10 +14,14 @@ public static class ScheduleEndpoints
             TimeProvider clock,
             CancellationToken cancellationToken) =>
         {
+            var networkStopId = await catalogue.NetworkStopIdAsync(stopId, cancellationToken);
+
+            if (networkStopId is null) return Results.Ok(Array.Empty<object>());
+
             var zone = TimeZoneInfo.FindSystemTimeZoneById(options.Value.TimeZone);
             var now = clock.GetUtcNow().ToUnixTimeSeconds();
             var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), zone).DateTime);
-            var patternIds = await catalogue.PatternIdsForAsync(stopId, cancellationToken);
+            var patternIds = await catalogue.PatternIdsForAsync(networkStopId, cancellationToken);
             var timetable = new List<ScheduledCall>();
 
             foreach (var patternId in patternIds)
@@ -26,10 +30,10 @@ public static class ScheduleEndpoints
 
                 if (pattern is null) continue;
 
-                timetable.AddRange(ScheduleReader.CallsAt(pattern, stopId, today, zone));
+                timetable.AddRange(ScheduleReader.CallsAt(pattern, networkStopId, today, zone));
             }
 
-            var live = await arrivals.GetApproachingAsync(stopId, now, cancellationToken);
+            var live = await arrivals.GetApproachingAsync(networkStopId, now, cancellationToken);
             var etas = live.Values
                 .Select(trip => new LiveEta(trip.TripId, trip.PatternId, trip.VehicleId, trip.EtaUnix))
                 .ToList();

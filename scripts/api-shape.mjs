@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
 
 const BASE = 'https://api.carrismetropolitana.pt';
@@ -6,7 +5,7 @@ const HUB = 'https://go.tmlmobilidade.pt/hub/api/v1';
 const SHAPE_FILE = new URL('./api-shape.json', import.meta.url);
 
 const SAMPLE = 40;
-const COMMON_ENOUGH = 0.5;
+const FOUND_CHANGES = 2;
 
 async function getJson(url) {
   const response = await fetch(url, { headers: { accept: 'application/json' } });
@@ -25,11 +24,9 @@ function typeOf(value) {
 
 function shapeOf(objects) {
   const seen = new Map();
-  const sampled = objects.slice(0, SAMPLE);
+  const sampled = objects.slice(0, SAMPLE).filter(o => o !== null && typeof o === 'object');
 
   for (const object of sampled) {
-    if (object === null || typeof object !== 'object') continue;
-
     for (const [field, value] of Object.entries(object)) {
       const entry = seen.get(field) ?? { count: 0, types: new Set() };
 
@@ -39,15 +36,17 @@ function shapeOf(objects) {
     }
   }
 
-  const shape = {};
+  const always = {};
+  const sometimes = {};
 
   for (const [field, entry] of [...seen].sort(([a], [b]) => a.localeCompare(b))) {
-    if (entry.count / sampled.length < COMMON_ENOUGH) continue;
+    const type = [...entry.types].sort().join('|') || 'null';
 
-    shape[field] = [...entry.types].sort().join('|') || 'null';
+    if (entry.count === sampled.length) always[field] = type;
+    else sometimes[field] = type;
   }
 
-  return shape;
+  return { always, sometimes };
 }
 
 const HEAVY = ['carris /stops', 'hub network/stops'];
@@ -98,22 +97,25 @@ export function compare(recorded, live) {
     const before = recorded[endpoint];
     const after = live[endpoint];
 
-    if (!after || Object.keys(after).length === 0) {
+    if (!after || Object.keys(after.always).length + Object.keys(after.sometimes).length === 0) {
       changes.push({ endpoint, kind: 'silent', detail: 'answered with nothing to read' });
       continue;
     }
 
-    for (const [field, type] of Object.entries(before)) {
-      if (!(field in after)) {
+    const known = { ...before.sometimes, ...before.always };
+    const present = { ...after.sometimes, ...after.always };
+
+    for (const [field, type] of Object.entries(before.always)) {
+      if (!(field in present)) {
         changes.push({ endpoint, kind: 'gone', detail: `${field} (${type})` });
-      } else if (after[field] !== type) {
-        changes.push({ endpoint, kind: 'retyped', detail: `${field}: ${type} -> ${after[field]}` });
+      } else if (present[field] !== type) {
+        changes.push({ endpoint, kind: 'retyped', detail: `${field}: ${type} -> ${present[field]}` });
       }
     }
 
-    for (const field of Object.keys(after)) {
-      if (!(field in before)) {
-        changes.push({ endpoint, kind: 'new', detail: `${field} (${after[field]})` });
+    for (const field of Object.keys(present)) {
+      if (!(field in known)) {
+        changes.push({ endpoint, kind: 'new', detail: `${field} (${present[field]})` });
       }
     }
   }
@@ -160,7 +162,7 @@ async function main() {
   }
 
   console.log(`\n${changes.length} difference(s). Run "npm run record:api" once the app handles them.`);
-  process.exit(1);
+  process.exit(FOUND_CHANGES);
 }
 
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('api-shape.mjs')) {

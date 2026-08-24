@@ -10,7 +10,9 @@ name: API contract
 # Daily: the same check over everything, plus the contract check, which asserts
 # the handful of things the app cannot work without.
 #
-# Either failing opens an issue saying what moved, assigned so it is not missed.
+# Drift opens an issue, assigned, and leaves the run green: the issue is the
+# notification and one an hour by email is not. Only the checks falling over
+# fail the run.
 
 on:
   schedule:
@@ -46,10 +48,16 @@ jobs:
           set -o pipefail
           echo "full run: $FULL"
           if [ "$FULL" = "true" ]; then
-            node scripts/api-shape.mjs 2>&1 | tee shape.log
+            node scripts/api-shape.mjs 2>&1 | tee shape.log || code=$?
           else
-            node scripts/api-shape.mjs --light 2>&1 | tee shape.log
+            node scripts/api-shape.mjs --light 2>&1 | tee shape.log || code=$?
           fi
+          code=${code:-0}
+          if [ "$code" = "2" ]; then
+            echo "moved=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          exit "$code"
 
       - name: Check the contract the app relies on
         id: contract
@@ -57,10 +65,16 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          node scripts/api-contract-check.mjs 2>&1 | tee contract.log
+          node scripts/api-contract-check.mjs 2>&1 | tee contract.log || code=$?
+          code=${code:-0}
+          if [ "$code" = "2" ]; then
+            echo "broke=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          exit "$code"
 
       - name: Say what moved
-        if: failure()
+        if: steps.shape.outputs.moved == 'true' || steps.contract.outputs.broke == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -76,8 +90,8 @@ jobs:
               ? '```\n' + text.split(marker)[1].trim() + '\n```'
               : '';
 
-            const moved = '${{ steps.shape.outcome }}' === 'failure';
-            const broke = '${{ steps.contract.outcome }}' === 'failure';
+            const moved = '${{ steps.shape.outputs.moved }}' === 'true';
+            const broke = '${{ steps.contract.outputs.broke }}' === 'true';
 
             const body = [
               broke
@@ -124,3 +138,4 @@ jobs:
               assignees: ['KennedySilva8907'],
               body,
             });
+

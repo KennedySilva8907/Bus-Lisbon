@@ -33,6 +33,7 @@ function warn(check, detail) {
 }
 
 const UPSTREAM_ATTEMPTS = 3;
+const FOUND_FAILURES = 2;
 
 async function getJson(path, base = BASE) {
   let lastStatus = 0;
@@ -427,7 +428,7 @@ async function main() {
     console.log('\nFAILURES:');
     for (const f of failures) console.log(`  ✗ [${f.check}] ${f.detail}`);
     console.log(`\n${failures.length} check(s) failed — the Carris API likely changed.`);
-    process.exit(1);
+    process.exit(FOUND_FAILURES);
   }
   console.log('\n✓ All contract checks passed.');
 }

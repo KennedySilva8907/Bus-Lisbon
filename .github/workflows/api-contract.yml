@@ -2,13 +2,15 @@ name: API contract
 
 # Early warning for upstream changes.
 #
-# Hourly: the shape check in light mode. It reads the live payloads the app
-# depends on and compares every field against scripts/api-shape.json, so a
-# field appearing, vanishing or changing type is caught before it breaks
-# anything. About 4.6 MB a run, and it skips the two big catalogues.
+# Asked for every hour, at a minute nobody else picks. GitHub runs scheduled
+# workflows when it has room, so the real gap has been a few hours; the top of
+# the hour was worse, with eleven-hour holes. The shape check in light mode
+# reads the live payloads and compares every field against
+# scripts/api-shape.json, so a field appearing, vanishing or changing type is
+# caught before it breaks anything. About 4.6 MB a run.
 #
-# Daily: the same check over everything, plus the contract check, which asserts
-# the handful of things the app cannot work without.
+# Once a day: the same check over everything, plus the contract check, which
+# asserts the handful of things the app cannot work without.
 #
 # Drift opens an issue, assigned, and leaves the run green: the issue is the
 # notification and one an hour by email is not. Only the checks falling over
@@ -16,8 +18,8 @@ name: API contract
 
 on:
   schedule:
-    - cron: '0 * * * *'
-    - cron: '0 7 * * *'
+    - cron: '23 * * * *'
+    - cron: '23 6 * * *'
   workflow_dispatch:
     inputs:
       full:
@@ -33,7 +35,7 @@ jobs:
   watch:
     runs-on: ubuntu-latest
     env:
-      FULL: ${{ github.event.schedule == '0 7 * * *' || inputs.full || github.event_name == 'workflow_dispatch' }}
+      FULL: ${{ github.event.schedule == '23 6 * * *' || inputs.full || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v4
 

@@ -185,7 +185,7 @@
       "received_at": "number",
       "ride_id": "string",
       "route_id": "string",
-      "speed": "null",
+      "speed": "number",
       "stop_id": "string",
       "trip_id": "string",
       "vehicle_id": "string"

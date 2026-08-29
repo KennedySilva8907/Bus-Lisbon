@@ -35,6 +35,10 @@ export function describePassage(eta: ETA): Punctuality {
     : { label: 'Terminou o percurso', tone: 'finished' };
 }
 
+export function anyArrivalTime(etas: ETA[]): boolean {
+  return etas.some(eta => (eta.estimated_arrival_unix ?? 0) > 0 || (eta.observed_arrival_unix ?? 0) > 0);
+}
+
 export function wentByAt(eta: ETA): number | null {
   return eta.went_by_unix ?? eta.observed_arrival_unix ?? null;
 }

@@ -1,5 +1,5 @@
 import { useStopETA, type Stop, type ETA } from '../services/api';
-import { describeArrival, describePassage, describePunctuality, wentByAt, type PunctualityTone } from '../services/arrivals';
+import { anyArrivalTime, describeArrival, describePassage, describePunctuality, wentByAt, type PunctualityTone } from '../services/arrivals';
 import { fromUnixTime } from 'date-fns';
 import { X, Star, ChevronUp } from 'lucide-react';
 import { useRef, useEffect, useState, useMemo } from 'react';
@@ -100,9 +100,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
   // Carris/TML GO Hub migration), the feed still returns the day's schedule but
   // every passage comes without a vehicle and without a live estimate. Detect
   // that so we can tell the user it's an upstream gap, not a broken app.
-  const hasRealtime = etas.some(
-    e => !!e.vehicle_id || (e.estimated_arrival_unix != null && e.estimated_arrival_unix !== e.scheduled_arrival_unix),
-  );
+  const hasRealtime = anyArrivalTime(etas);
 
   if (!stop) return null;
 

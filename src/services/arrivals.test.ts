@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeArrival, describePassage, describePunctuality, wentByAt } from './arrivals';
+import { anyArrivalTime, describeArrival, describePassage, describePunctuality, wentByAt } from './arrivals';
 import type { ETA } from './api';
 
 const eta = (overrides: Partial<ETA>): ETA => ({
@@ -104,5 +104,31 @@ describe('describePassage', () => {
   it('says the trip is over', () => {
     expect(describePassage(eta({ trip_running: false })))
       .toEqual({ label: 'Terminou o percurso', tone: 'finished' });
+  });
+});
+
+describe('anyArrivalTime', () => {
+  it('is true when something on the stop has a live estimate', () => {
+    expect(anyArrivalTime([eta({}), eta({ estimated_arrival_unix: 1787950000 })])).toBe(true);
+  });
+
+  it('is true when a passage was actually watched', () => {
+    expect(anyArrivalTime([eta({ estimated_arrival_unix: 0, observed_arrival_unix: 1787949000 })])).toBe(true);
+  });
+
+  it('is false when the whole stop is timetable only', () => {
+    expect(anyArrivalTime([
+      eta({ estimated_arrival_unix: 0 }),
+      eta({ estimated_arrival_unix: 0, observed_arrival_unix: null }),
+    ])).toBe(false);
+  });
+
+  it('is not fooled by knowing which bus drives the trip', () => {
+    expect(anyArrivalTime([eta({ estimated_arrival_unix: 0, vehicle_id: '42|2548', trip_running: true })]))
+      .toBe(false);
+  });
+
+  it('is false for a stop with nothing on it', () => {
+    expect(anyArrivalTime([])).toBe(false);
   });
 });

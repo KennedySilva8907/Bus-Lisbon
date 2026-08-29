@@ -116,7 +116,7 @@ jobs:
               .join('\n')
               .split('\n')
               .filter(line => /^\s{2}(gone|new|retyped|silent|unwatched|✗)/.test(line))
-              .map(line => line.trim())
+              .map(line => line.trim().replace(/\d+/g, '#'))
               .sort()
               .join('\n');
 
@@ -149,7 +149,9 @@ jobs:
               per_page: 100,
             });
 
-            const written = [already.body ?? '', ...comments.map(comment => comment.body ?? '')].join('\n');
+            const written = [already.body ?? '', ...comments.map(comment => comment.body ?? '')]
+              .join('\n')
+              .replace(/\d+/g, '#');
             const isNew = detail.length > 0 && !detail.split('\n').every(line => written.includes(line));
             const quiet = Date.now() - new Date(already.updated_at).getTime() > 20 * 60 * 60 * 1000;
 

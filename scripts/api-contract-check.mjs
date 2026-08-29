@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Carris Metropolitana API contract check.
  *
@@ -34,6 +33,19 @@ function warn(check, detail) {
 
 const UPSTREAM_ATTEMPTS = 3;
 const FOUND_FAILURES = 2;
+const STALE_AFTER_MINUTES = 45;
+const SERVICE_IS_RUNNING_ABOVE = 200;
+
+export function arrivalsStopped({ newestUnix, nowUnix, busesOnTheRoad }) {
+  if (!Number.isFinite(newestUnix)) return null;
+
+  const behindMinutes = Math.round((nowUnix - newestUnix) / 60);
+
+  if (behindMinutes <= STALE_AFTER_MINUTES) return { stopped: false, behindMinutes };
+  if (busesOnTheRoad <= SERVICE_IS_RUNNING_ABOVE) return { stopped: false, behindMinutes, quiet: true };
+
+  return { stopped: true, behindMinutes };
+}
 
 async function getJson(path, base = BASE) {
   let lastStatus = 0;
@@ -56,7 +68,7 @@ function isFiniteNum(v) {
 
 // Holds values discovered in earlier checks so later checks can stay dynamic
 // (no hardcoded stop/pattern ids that could be retired by Carris).
-const discovered = { stopId: null, patternId: null, stopIds: [], network: null, networkStop: null };
+const discovered = { stopId: null, patternId: null, stopIds: [], network: null, networkStop: null, busesOnTheRoad: 0 };
 
 function operationalDay() {
   const lisbon = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Lisbon' }));
@@ -106,6 +118,8 @@ async function checkVehicles() {
   }
 
   // Feed pulled as JSON for a single tracked bus; keep an eye on the size.
+  discovered.busesOnTheRoad = live.length;
+
   const positionedRatio = Math.round((positioned.length / data.length) * 100);
   warn(name, `feed has ${data.length} entries, ${positioned.length} positioned (${positionedRatio}%), ${live.length} live`);
 
@@ -264,7 +278,35 @@ async function checkLiveEtas() {
   const stamped = rows.filter(row => Number(row.eta_at) > 1e12).length;
   if (stamped === 0) {
     fail(name, 'eta_at stopped being a millisecond stamp — every arrival time would be wrong by a factor of a thousand');
+    return;
   }
+
+  const verdict = arrivalsStopped({
+    newestUnix: Math.max(...rows.map(row => Number(row.eta_at) / 1000).filter(Number.isFinite)),
+    nowUnix: Date.now() / 1000,
+    busesOnTheRoad: discovered.busesOnTheRoad ?? 0,
+  });
+
+  if (verdict === null) return;
+
+  if (verdict.stopped) {
+    fail(
+      name,
+      `the newest arrival time across ${sample.length} stops is ${verdict.behindMinutes} minutes old while ` +
+      `${discovered.busesOnTheRoad} buses are reporting their position — the service has stopped updating, so every ` +
+      'stop falls back to the timetable and reads as scheduled'
+    );
+
+    return;
+  }
+
+  if (verdict.quiet) {
+    warn(name, `arrival times are ${verdict.behindMinutes} minutes old, with only ${discovered.busesOnTheRoad} buses out`);
+
+    return;
+  }
+
+  warn(name, `the newest arrival time is ${Math.abs(verdict.behindMinutes)} minutes ${verdict.behindMinutes < 0 ? 'ahead' : 'old'}`);
 }
 
 async function checkPositionsReadiness() {

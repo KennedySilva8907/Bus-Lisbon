@@ -108,6 +108,18 @@ jobs:
               moved ? 'Once the app handles the new shape, `npm run record:api` writes it back.' : '',
             ].filter(Boolean).join('\n');
 
+            const title = broke
+              ? 'The Carris API broke something the app relies on'
+              : 'The Carris API changed shape';
+
+            const detail = [moved ? read('shape.log') : '', broke ? read('contract.log') : '']
+              .join('\n')
+              .split('\n')
+              .filter(line => /^\s{2}(gone|new|retyped|silent|unwatched|✗)/.test(line))
+              .map(line => line.trim())
+              .sort()
+              .join('\n');
+
             const { data: open } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -115,29 +127,38 @@ jobs:
               labels: label,
             });
 
-            if (open.length > 0) {
-              const quiet = Date.now() - new Date(open[0].updated_at).getTime() > 20 * 60 * 60 * 1000;
+            const already = open.find(issue => issue.title === title);
 
-              if (quiet) {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: open[0].number,
-                  body: `Still happening.\n\n${body}`,
-                });
-              }
+            if (!already) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                labels: [label],
+                assignees: ['KennedySilva8907'],
+                body,
+              });
 
               return;
             }
 
-            await github.rest.issues.create({
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: broke
-                ? 'The Carris API broke something the app relies on'
-                : 'The Carris API changed shape',
-              labels: [label],
-              assignees: ['KennedySilva8907'],
-              body,
+              issue_number: already.number,
+              per_page: 100,
+            });
+
+            const written = [already.body ?? '', ...comments.map(comment => comment.body ?? '')].join('\n');
+            const isNew = detail.length > 0 && !detail.split('\n').every(line => written.includes(line));
+            const quiet = Date.now() - new Date(already.updated_at).getTime() > 20 * 60 * 60 * 1000;
+
+            if (!isNew && !quiet) return;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: already.number,
+              body: `${isNew ? 'Something else now.' : 'Still happening.'}\n\n${body}`,
             });
 

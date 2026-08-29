@@ -85,7 +85,10 @@
       "wheelchair_accessible": "boolean"
     },
     "sometimes": {
-      "door_status": "string"
+      "door_status": "string",
+      "emission_class": "string",
+      "occupancy_estimated": "number",
+      "occupancy_status": "string"
     }
   },
   "carris /patterns/{id}": {

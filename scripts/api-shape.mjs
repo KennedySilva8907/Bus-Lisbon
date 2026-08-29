@@ -22,9 +22,19 @@ function typeOf(value) {
   return typeof value;
 }
 
+export function spread(objects) {
+  const usable = objects.filter(o => o !== null && typeof o === 'object');
+
+  if (usable.length <= SAMPLE) return usable;
+
+  const stride = usable.length / SAMPLE;
+
+  return Array.from({ length: SAMPLE }, (_, i) => usable[Math.floor(i * stride)]);
+}
+
 function shapeOf(objects) {
   const seen = new Map();
-  const sampled = objects.slice(0, SAMPLE).filter(o => o !== null && typeof o === 'object');
+  const sampled = spread(objects);
 
   for (const object of sampled) {
     for (const [field, value] of Object.entries(object)) {

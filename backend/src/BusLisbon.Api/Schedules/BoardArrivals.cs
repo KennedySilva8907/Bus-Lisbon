@@ -11,7 +11,8 @@ public sealed class BoardArrivals(StopBoardService board) : ICarrisArrivals
         VehicleId = entry.VehicleId,
         EstimatedArrivalUnix = entry.IsPast || !entry.IsRealtime ? null : entry.EstimatedUnix,
         ScheduledArrivalUnix = entry.ScheduledUnix,
-        ObservedArrivalUnix = entry.IsPast && entry.IsRealtime ? entry.EstimatedUnix : null,
+        ObservedArrivalUnix =
+            entry.IsPast && entry.IsRealtime && !entry.FromTheBus ? entry.EstimatedUnix : null,
     };
 
     public async Task<IReadOnlyList<CarrisArrival>> GetArrivalsAsync(

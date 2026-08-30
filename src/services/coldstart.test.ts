@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { backendIsAwake } from './gateway';
 import { pickFromFleet } from './api';
 import type { Vehicle } from './api';
@@ -24,6 +24,49 @@ describe('backendIsAwake', () => {
 
   it('is awake when the stream is connected even before the poll answers', () => {
     expect(backendIsAwake({ ...asleep, connected: true })).toBe(true);
+  });
+});
+
+const withGateway = async (base: string, answer: () => Promise<unknown> = () => Promise.resolve({})) => {
+  vi.resetModules();
+  vi.stubEnv('VITE_GATEWAY_BASE', base);
+
+  const called = vi.fn(answer);
+  vi.stubGlobal('fetch', called);
+
+  const { wakeBackend: wake } = await import('./gateway');
+
+  return { wake, called };
+};
+
+describe('wakeBackend', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it('asks for health so the container starts before a stop is opened', async () => {
+    const { wake, called } = await withGateway('/gw');
+
+    await wake();
+
+    expect(called).toHaveBeenCalledTimes(1);
+    expect(called).toHaveBeenCalledWith('/gw/health');
+  });
+
+  it('says nothing when the backend is still down', async () => {
+    const { wake } = await withGateway('/gw', () => Promise.reject(new Error('asleep')));
+
+    await expect(wake()).resolves.toBeUndefined();
+  });
+
+  it('leaves the network alone when there is no gateway', async () => {
+    const { wake, called } = await withGateway('');
+
+    await wake();
+
+    expect(called).not.toHaveBeenCalled();
   });
 });
 

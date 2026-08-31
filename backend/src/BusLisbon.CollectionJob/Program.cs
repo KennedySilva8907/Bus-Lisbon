@@ -33,6 +33,7 @@ public static class ArrivalCollectionJob
                 builder.Configuration.GetConnectionString(ConnectionName),
                 sql => sql.EnableRetryOnFailure(maxRetryCount: 8, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null)));
         builder.Services.AddScoped<ArrivalCollector>();
+        builder.Services.AddScoped<ObservationBuffer>();
         builder.Services.AddScoped<LinePunctualityQuery>();
         builder.Services.AddScoped<LineRankingPublisher>();
 
@@ -45,16 +46,37 @@ public static class ArrivalCollectionJob
         try
         {
             var collector = scope.ServiceProvider.GetRequiredService<ArrivalCollector>();
-            var report = await collector.CollectOnceAsync(SampleStops.All, CancellationToken.None);
+            var buffer = scope.ServiceProvider.GetRequiredService<ObservationBuffer>();
+
+            var watch = await collector.WatchAsync(SampleStops.All, CancellationToken.None);
+
+            await buffer.KeepAsync(watch.Passages, CancellationToken.None);
 
             logger.LogInformation(
-                "Watched {StopsRead} of {StopsTotal} stops in {Elapsed}s: {Seen} buses standing at one of them, {Written} written, {StopsFailed} feed failures",
-                report.StopsRead,
+                "Watched {StopsRead} of {StopsTotal} stops in {Elapsed}s: {Seen} buses standing at one of them, {StopsFailed} feed failures",
+                watch.StopsRead,
                 SampleStops.All.Count,
                 (int)TimeProvider.System.GetElapsedTime(started).TotalSeconds,
-                report.Seen,
-                report.Written,
-                report.StopsFailed);
+                watch.Passages.Count,
+                watch.StopsFailed);
+
+            if (!await buffer.DueForWritingAsync(CancellationToken.None))
+            {
+                logger.LogInformation("Holding the passages until the daily write");
+
+                return 0;
+            }
+
+            await buffer.AttemptedAsync(CancellationToken.None);
+
+            var pending = await buffer.PendingAsync(CancellationToken.None);
+            var written = await collector.WriteAsync(pending.Passages, CancellationToken.None);
+
+            await buffer.ForgetAsync(pending.Batches, CancellationToken.None);
+
+            logger.LogInformation(
+                "Wrote {Written} of {Held} passages held over {Batches} runs",
+                written, pending.Passages.Count, pending.Batches.Count);
 
             var lines = await scope.ServiceProvider
                 .GetRequiredService<LinePunctualityQuery>()

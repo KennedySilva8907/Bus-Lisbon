@@ -95,3 +95,9 @@ export interface BackendState {
 export function backendIsAwake(state: BackendState): boolean {
   return state.connected || (state.answered && !state.failed);
 }
+
+export async function wakeBackend(): Promise<void> {
+  if (!isGatewayEnabled()) return;
+
+  await fetch(`${GATEWAY_BASE}/health`).catch(() => undefined);
+}

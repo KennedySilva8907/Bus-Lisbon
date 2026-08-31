@@ -6,6 +6,7 @@ import SplashScreen from './components/SplashScreen';
 import { usePattern, useSingleVehicle, useStops } from './services/api';
 import type { Stop } from './services/api';
 import { useFavorites } from './hooks/useFavorites';
+import { wakeBackend } from './services/gateway';
 
 function App() {
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
@@ -51,6 +52,10 @@ function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [splashFading, setSplashFading] = useState(false);
   const [minDelayPassed, setMinDelayPassed] = useState(false);
+
+  useEffect(() => {
+    void wakeBackend();
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setMinDelayPassed(true), 5000);

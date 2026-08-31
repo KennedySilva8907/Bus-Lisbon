@@ -94,6 +94,13 @@ jobs:
             --resource-group rg-buslisbon \
             --target-port 8080
 
+      - name: Keep the replica up during the hours the app is used
+        run: |
+          az containerapp update \
+            --name ca-buslisbon-api \
+            --resource-group rg-buslisbon \
+            --yaml backend/deploy/scale.yaml
+
       - name: Roll out the alert job image
         run: |
           if az containerapp job show --name cj-buslisbon-alerts --resource-group rg-buslisbon >/dev/null 2>&1; then

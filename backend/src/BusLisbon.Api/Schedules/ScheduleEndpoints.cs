@@ -22,7 +22,8 @@ public static class ScheduleEndpoints
                 estimatedUnix = entry.EstimatedUnix,
                 isPast = entry.IsPast,
                 isRealtime = entry.IsRealtime,
-                tripRunning = entry.TripRunning
+                tripRunning = entry.TripRunning,
+                fromTheBus = entry.FromTheBus
             }).ToList());
         });
 

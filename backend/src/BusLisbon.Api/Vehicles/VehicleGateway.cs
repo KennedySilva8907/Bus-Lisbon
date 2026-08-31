@@ -5,7 +5,7 @@ namespace BusLisbon.Api.Vehicles;
 
 public sealed record VehicleGatewayStatus(int LiveVehicles, double? AgeSeconds, bool Stale);
 
-public sealed record RunningBus(string VehicleId, string? AtStopId);
+public sealed record RunningBus(string VehicleId, string? AtStopId, long ReportedAtUnix = 0);
 
 public sealed class VehicleGateway(
     ICarrisClient client,
@@ -53,7 +53,11 @@ public sealed class VehicleGateway(
         {
             var trip = VehicleMatcher.BareTripId(vehicle.TripId);
 
-            if (trip.Length > 0) byTrip[trip] = new RunningBus(vehicle.Id, NetworkStopOf(vehicle));
+            if (trip.Length > 0)
+            {
+                byTrip[trip] = new RunningBus(
+                    vehicle.Id, NetworkStopOf(vehicle), vehicle.Timestamp ?? 0);
+            }
         }
 
         return byTrip;

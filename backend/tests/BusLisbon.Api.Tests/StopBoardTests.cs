@@ -207,4 +207,161 @@ public class StopBoardTests
         Assert.Single(board);
         Assert.True(board[0].IsPast);
     }
+
+    private static Dictionary<string, RunningBus> Fleet(string atStopId, long reportedAt) =>
+        new() { ["2753_0_1|1|3|1835"] = new("42|2524", atStopId, reportedAt) };
+
+    private static ScheduledCall Circular(params string[] tripKeys) =>
+        new("4001", "[A2L1N]4001_0_3", "Alcochete | Circular",
+            tripKeys, Now + 600, false, 5, AlongTheRoute);
+
+    [Fact]
+    public void TakesTheBusClosestToTheTimetableNotTheFirstItFinds()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["4001_0_3|9900|1730"] = new("44|1", "110001", Now + 900),
+            ["4001_0_3|3000|1730"] = new("44|2", "110001", Now),
+        };
+
+        var closest = StopBoard.ClosestToTheSchedule(
+            Circular("4001_0_3|9900|1730", "4001_0_3|3000|1730"), fleet);
+
+        Assert.NotNull(closest);
+        Assert.Equal("44|2", closest.Bus.VehicleId);
+        Assert.Equal(0, closest.OffScheduleSeconds);
+    }
+
+    [Fact]
+    public void WillNotTakeABusTooFarFromTheDepartureItWouldBeAnswering()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["4001_0_3|9900|1730"] = new("44|1", "110001", Now + 3600),
+        };
+
+        Assert.Null(StopBoard.ClosestToTheSchedule(Circular("4001_0_3|9900|1730"), fleet));
+    }
+
+    [Fact]
+    public void ADepartureWhoseOnlyBusIsAnotherLoopFallsBackToTheTimetable()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["4001_0_3|9900|1730"] = new("44|1", "110001", Now + 3600),
+        };
+
+        var board = StopBoard.Build(
+            [Circular("4001_0_3|9900|1730")], [], Now, Behind, Ahead, fleet);
+
+        Assert.Single(board);
+        Assert.False(board[0].IsRealtime);
+        Assert.False(board[0].FromTheBus);
+        Assert.Equal(Now + 600, board[0].EffectiveUnix);
+    }
+
+    [Fact]
+    public void CarriesTheDelayFromWhereTheBusIsToWhereWeAre()
+    {
+        var board = StopBoard.Build(
+            [Call(secondsAway: 600)], [], Now, Behind, Ahead, Fleet("110001", Now + 90));
+
+        Assert.Single(board);
+        Assert.True(board[0].IsRealtime);
+        Assert.Equal(Now + 90 + 600, board[0].EffectiveUnix);
+    }
+
+    [Fact]
+    public void KeepsThePublishedEstimateWhenThereIsOne()
+    {
+        var board = StopBoard.Build(
+            [Call(secondsAway: 240)], [Eta(secondsAway: 300)], Now, Behind, Ahead,
+            Fleet("110001", Now + 90));
+
+        Assert.Single(board);
+        Assert.Equal(Now + 300, board[0].EffectiveUnix);
+        Assert.Equal("1257", board[0].VehicleId);
+    }
+
+    [Fact]
+    public void AnswersFromTheBusWhenThePublishedEstimateHasFrozen()
+    {
+        var stale = new LiveEta(
+            "[0277F][BNA17]2753_0_1|1|3|1835", "[BNA17]2753_0_1", "1257", Now - 165600);
+
+        var board = StopBoard.Build(
+            [Call(secondsAway: 600)], [stale], Now, Behind, Ahead, Fleet("110001", Now + 90));
+
+        Assert.Single(board);
+        Assert.True(board[0].IsRealtime);
+        Assert.Equal(Now + 90 + 600, board[0].EffectiveUnix);
+        Assert.Equal("42|2524", board[0].VehicleId);
+    }
+
+    [Fact]
+    public void AFrozenEstimateDoesNotTakeTheDepartureOffTheBoard()
+    {
+        var stale = new LiveEta(
+            "[0277F][BNA17]2753_0_1|1|3|1835", "[BNA17]2753_0_1", "1257", Now - 165600);
+
+        var board = StopBoard.Build([Call(secondsAway: 600)], [stale], Now, Behind, Ahead);
+
+        Assert.Single(board);
+        Assert.False(board[0].IsRealtime);
+        Assert.Equal(Now + 600, board[0].EffectiveUnix);
+    }
+
+    [Fact]
+    public void ABusAlreadyPastOurStopWorksNothingOut()
+    {
+        Assert.Null(StopBoard.EstimatedFromBus(Call(), new("42|2524", "110999", Now)));
+    }
+
+    [Fact]
+    public void ABusStandingAtOurOwnStopWorksNothingOut()
+    {
+        Assert.Null(StopBoard.EstimatedFromBus(Call(), new("42|2524", "110785", Now)));
+    }
+
+    [Fact]
+    public void ABusWithNoPositionTimeWorksNothingOut()
+    {
+        Assert.Null(StopBoard.EstimatedFromBus(Call(), new("42|2524", "110001")));
+    }
+
+    [Fact]
+    public void MarksATimeItWorkedOutItself()
+    {
+        var board = StopBoard.Build(
+            [Call(secondsAway: 600)], [], Now, Behind, Ahead, Fleet("110001", Now + 90));
+
+        Assert.True(board[0].FromTheBus);
+    }
+
+    [Fact]
+    public void DoesNotMarkATimeTheOperatorPublished()
+    {
+        var board = StopBoard.Build(
+            [Call(secondsAway: 240)], [Eta(secondsAway: 300)], Now, Behind, Ahead,
+            Fleet("110001", Now + 90));
+
+        Assert.False(board[0].FromTheBus);
+    }
+
+    [Fact]
+    public void TheArithmeticMatchesTheOneWorkedOutByHand()
+    {
+        var route = new TmlScheduleEntry[]
+        {
+            new() { ArrivalTime = "17:38:52", StopId = "110625", StopSequence = 23 },
+            new() { ArrivalTime = "17:41:09", StopId = "110591", StopSequence = 24 },
+        };
+
+        var call = new ScheduledCall(
+            "2769", "[BNA17]2769_0_1", "Odivelas", ["2769_0_1|1|3|1700"], Now, false, 24, route);
+
+        var reported = Now + 31;
+
+        Assert.Equal(reported + 137, StopBoard.EstimatedFromBus(call, new("42|2540", "110625", reported)));
+    }
 }

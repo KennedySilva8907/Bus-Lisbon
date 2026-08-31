@@ -16,6 +16,9 @@ public sealed record BoardEntry(
 
 public sealed record LiveEta(string TripId, string PatternId, string VehicleId, long EstimatedUnix);
 
+public sealed record ReckonedArrival(
+    Vehicles.RunningBus Bus, long EstimatedUnix, long OffScheduleSeconds);
+
 public static class StopBoard
 {
     public static IReadOnlyList<BoardEntry> Build(
@@ -41,23 +44,24 @@ public static class StopBoard
 
             var published = Matching(byTrip, call.TripKeys);
             var running = OnTheRoad(fleetByTrip, call.TripKeys);
+            var reckoned = ClosestToTheSchedule(call, fleetByTrip);
             var eta = published is not null && Within(published.EstimatedUnix, nowUnix, behind, ahead)
                 ? published
                 : null;
 
-            var estimated = eta?.EstimatedUnix ?? EstimatedFromBus(call, running) ?? 0;
+            var estimated = eta?.EstimatedUnix ?? reckoned?.EstimatedUnix ?? 0;
             var effective = estimated != 0 ? estimated : call.ScheduledUnix;
 
             if (!Within(effective, nowUnix, behind, ahead)) continue;
 
-            var gone = effective < nowUnix && !StillShortOf(call, running);
+            var gone = effective < nowUnix && !StillShortOf(call, reckoned?.Bus ?? running);
 
             board.Add(new BoardEntry(
                 call.LineId,
                 call.PatternId,
                 call.Headsign,
                 eta?.TripId ?? call.TripKeys.FirstOrDefault() ?? string.Empty,
-                eta?.VehicleId ?? running?.VehicleId ?? string.Empty,
+                eta?.VehicleId ?? reckoned?.Bus.VehicleId ?? running?.VehicleId ?? string.Empty,
                 call.ScheduledUnix,
                 estimated,
                 effective,
@@ -81,6 +85,31 @@ public static class StopBoard
         }
 
         return null;
+    }
+
+    public static readonly TimeSpan FarthestFromTheSchedule = TimeSpan.FromMinutes(30);
+
+    public static ReckonedArrival? ClosestToTheSchedule(
+        ScheduledCall call, IReadOnlyDictionary<string, Vehicles.RunningBus>? fleetByTrip)
+    {
+        if (fleetByTrip is null) return null;
+
+        ReckonedArrival? closest = null;
+
+        foreach (var key in call.TripKeys)
+        {
+            if (!fleetByTrip.TryGetValue(Vehicles.VehicleMatcher.BareTripId(key), out var bus)) continue;
+            if (EstimatedFromBus(call, bus) is not { } estimated) continue;
+
+            var off = estimated - call.ScheduledUnix;
+
+            if (Math.Abs(off) > (long)FarthestFromTheSchedule.TotalSeconds) continue;
+            if (closest is not null && Math.Abs(off) >= Math.Abs(closest.OffScheduleSeconds)) continue;
+
+            closest = new ReckonedArrival(bus, estimated, off);
+        }
+
+        return closest;
     }
 
     public static bool Within(long unix, long nowUnix, TimeSpan behind, TimeSpan ahead) =>

@@ -211,6 +211,55 @@ public class StopBoardTests
     private static Dictionary<string, RunningBus> Fleet(string atStopId, long reportedAt) =>
         new() { ["2753_0_1|1|3|1835"] = new("42|2524", atStopId, reportedAt) };
 
+    private static ScheduledCall Circular(params string[] tripKeys) =>
+        new("4001", "[A2L1N]4001_0_3", "Alcochete | Circular",
+            tripKeys, Now + 600, false, 5, AlongTheRoute);
+
+    [Fact]
+    public void TakesTheBusClosestToTheTimetableNotTheFirstItFinds()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["4001_0_3|9900|1730"] = new("44|1", "110001", Now + 900),
+            ["4001_0_3|3000|1730"] = new("44|2", "110001", Now),
+        };
+
+        var closest = StopBoard.ClosestToTheSchedule(
+            Circular("4001_0_3|9900|1730", "4001_0_3|3000|1730"), fleet);
+
+        Assert.NotNull(closest);
+        Assert.Equal("44|2", closest.Bus.VehicleId);
+        Assert.Equal(0, closest.OffScheduleSeconds);
+    }
+
+    [Fact]
+    public void WillNotTakeABusTooFarFromTheDepartureItWouldBeAnswering()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["4001_0_3|9900|1730"] = new("44|1", "110001", Now + 3600),
+        };
+
+        Assert.Null(StopBoard.ClosestToTheSchedule(Circular("4001_0_3|9900|1730"), fleet));
+    }
+
+    [Fact]
+    public void ADepartureWhoseOnlyBusIsAnotherLoopFallsBackToTheTimetable()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["4001_0_3|9900|1730"] = new("44|1", "110001", Now + 3600),
+        };
+
+        var board = StopBoard.Build(
+            [Circular("4001_0_3|9900|1730")], [], Now, Behind, Ahead, fleet);
+
+        Assert.Single(board);
+        Assert.False(board[0].IsRealtime);
+        Assert.False(board[0].FromTheBus);
+        Assert.Equal(Now + 600, board[0].EffectiveUnix);
+    }
+
     [Fact]
     public void CarriesTheDelayFromWhereTheBusIsToWhereWeAre()
     {

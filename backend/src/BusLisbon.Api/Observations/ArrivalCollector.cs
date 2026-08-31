@@ -6,6 +6,9 @@ namespace BusLisbon.Api.Observations;
 
 public sealed record CollectionReport(int StopsRead, int StopsFailed, int Seen, int Written);
 
+public sealed record WatchReport(
+    int StopsRead, int StopsFailed, IReadOnlyList<ArrivalObservation> Passages);
+
 public sealed class ArrivalCollector(
     ICarrisClient fleet,
     IPassageObserver observer,
@@ -15,6 +18,18 @@ public sealed class ArrivalCollector(
     ILogger<ArrivalCollector> logger)
 {
     public async Task<CollectionReport> CollectOnceAsync(
+        IReadOnlyList<string> stopIds, CancellationToken cancellationToken)
+    {
+        var watch = await WatchAsync(stopIds, cancellationToken);
+
+        if (watch.StopsFailed > 0) return new CollectionReport(0, 1, 0, 0);
+
+        var written = await WriteAsync(watch.Passages, cancellationToken);
+
+        return new CollectionReport(watch.StopsRead, 0, watch.Passages.Count, written);
+    }
+
+    public async Task<WatchReport> WatchAsync(
         IReadOnlyList<string> stopIds, CancellationToken cancellationToken)
     {
         IReadOnlyList<Vehicles.Vehicle> buses;
@@ -34,11 +49,18 @@ public sealed class ArrivalCollector(
         {
             logger.LogWarning(exception, "Reading the fleet failed, nothing to record this run");
 
-            return new CollectionReport(0, 1, 0, 0);
+            return new WatchReport(0, 1, []);
         }
 
         var watched = stopIds.ToHashSet();
-        var passages = await observer.ObserveAsync(buses, watched, cancellationToken);
+
+        return new WatchReport(
+            watched.Count, 0, await observer.ObserveAsync(buses, watched, cancellationToken));
+    }
+
+    public async Task<int> WriteAsync(
+        IReadOnlyList<ArrivalObservation> passages, CancellationToken cancellationToken)
+    {
         var pending = new List<ArrivalObservation>();
         var written = 0;
 
@@ -52,9 +74,7 @@ public sealed class ArrivalCollector(
             }
         }
 
-        written += await FlushAsync(pending, cancellationToken);
-
-        return new CollectionReport(watched.Count, 0, passages.Count, written);
+        return written + await FlushAsync(pending, cancellationToken);
     }
 
     private async Task<IReadOnlyList<ArrivalObservation>> OnlyNewAsync(

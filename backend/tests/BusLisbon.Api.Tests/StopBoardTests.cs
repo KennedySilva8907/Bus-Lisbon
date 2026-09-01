@@ -160,7 +160,7 @@ public class StopBoardTests
     {
         var fleet = new Dictionary<string, RunningBus>
         {
-            ["2753_0_1|1|3|1835"] = new("42|2524", "110001", Now)
+            ["2753_0_1|1|3|1835"] = new("42|2524", "110001")
         };
 
         var board = StopBoard.Build([Call(secondsAway: -900)], [], Now, Behind, Ahead, fleet);
@@ -175,7 +175,7 @@ public class StopBoardTests
     {
         var fleet = new Dictionary<string, RunningBus>
         {
-            ["2753_0_1|1|3|1835"] = new("42|2534", "110785", Now)
+            ["2753_0_1|1|3|1835"] = new("42|2534", "110785")
         };
 
         var board = StopBoard.Build([Call(secondsAway: -180)], [], Now, Behind, Ahead, fleet);
@@ -270,9 +270,20 @@ public class StopBoardTests
 
         Assert.Single(board);
         Assert.False(board[0].IsRealtime);
+        Assert.False(board[0].FromTheBus);
         Assert.Equal(Now + 600, board[0].EffectiveUnix);
     }
 
+    [Fact]
+    public void CarriesTheDelayFromWhereTheBusIsToWhereWeAre()
+    {
+        var board = StopBoard.Build(
+            [Call(secondsAway: 600)], [], Now, Behind, Ahead, Fleet("110001", Now + 90));
+
+        Assert.Single(board);
+        Assert.True(board[0].IsRealtime);
+        Assert.Equal(Now + 90 + 600, board[0].EffectiveUnix);
+    }
 
     [Fact]
     public void KeepsThePublishedEstimateWhenThereIsOne()
@@ -286,6 +297,20 @@ public class StopBoardTests
         Assert.Equal("1257", board[0].VehicleId);
     }
 
+    [Fact]
+    public void AnswersFromTheBusWhenThePublishedEstimateHasFrozen()
+    {
+        var stale = new LiveEta(
+            "[0277F][BNA17]2753_0_1|1|3|1835", "[BNA17]2753_0_1", "1257", Now - 165600);
+
+        var board = StopBoard.Build(
+            [Call(secondsAway: 600)], [stale], Now, Behind, Ahead, Fleet("110001", Now + 90));
+
+        Assert.Single(board);
+        Assert.True(board[0].IsRealtime);
+        Assert.Equal(Now + 90 + 600, board[0].EffectiveUnix);
+        Assert.Equal("42|2524", board[0].VehicleId);
+    }
 
     [Fact]
     public void AFrozenEstimateDoesNotTakeTheDepartureOffTheBoard()
@@ -362,7 +387,24 @@ public class StopBoardTests
         Assert.Null(StopBoard.EstimatedFromBus(Call(), new("42|2524", "110001")));
     }
 
+    [Fact]
+    public void MarksATimeItWorkedOutItself()
+    {
+        var board = StopBoard.Build(
+            [Call(secondsAway: 600)], [], Now, Behind, Ahead, Fleet("110001", Now + 90));
 
+        Assert.True(board[0].FromTheBus);
+    }
+
+    [Fact]
+    public void DoesNotMarkATimeTheOperatorPublished()
+    {
+        var board = StopBoard.Build(
+            [Call(secondsAway: 240)], [Eta(secondsAway: 300)], Now, Behind, Ahead,
+            Fleet("110001", Now + 90));
+
+        Assert.False(board[0].FromTheBus);
+    }
 
     [Fact]
     public void TheArithmeticMatchesTheOneWorkedOutByHand()

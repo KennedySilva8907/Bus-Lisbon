@@ -11,7 +11,8 @@ public sealed record BoardEntry(
     long EffectiveUnix,
     bool IsPast,
     bool IsRealtime,
-    bool TripRunning);
+    bool TripRunning,
+    bool FromTheBus = false);
 
 public sealed record LiveEta(string TripId, string PatternId, string VehicleId, long EstimatedUnix);
 
@@ -48,13 +49,12 @@ public static class StopBoard
                 ? published
                 : null;
 
-            var estimated = eta?.EstimatedUnix ?? 0;
+            var estimated = eta?.EstimatedUnix ?? reckoned?.EstimatedUnix ?? 0;
             var effective = estimated != 0 ? estimated : call.ScheduledUnix;
 
             if (!Within(effective, nowUnix, behind, ahead)) continue;
 
-            var mine = reckoned?.Bus;
-            var gone = mine is not null ? AlreadyThrough(call, mine) : effective < nowUnix;
+            var gone = effective < nowUnix && !HasNotGoneBy(call, reckoned?.Bus ?? running);
 
             board.Add(new BoardEntry(
                 call.LineId,
@@ -67,7 +67,8 @@ public static class StopBoard
                 effective,
                 gone,
                 estimated != 0,
-                eta is not null || running is not null));
+                eta is not null || running is not null,
+                eta is null && estimated != 0));
         }
 
         return [.. board.OrderBy(entry => entry.EffectiveUnix)];
@@ -129,13 +130,13 @@ public static class StopBoard
         return bus.ReportedAtUnix + (arrives - left);
     }
 
-    public static bool AlreadyThrough(ScheduledCall call, Vehicles.RunningBus? bus)
+    public static bool HasNotGoneBy(ScheduledCall call, Vehicles.RunningBus? bus)
     {
         if (bus?.AtStopId is not { } atStopId) return false;
 
         var at = call.Schedule.FirstOrDefault(stop => stop.StopId == atStopId);
 
-        return at is not null && at.StopSequence > call.StopSequence;
+        return at is not null && at.StopSequence <= call.StopSequence;
     }
 
     private static LiveEta? Matching(

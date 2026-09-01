@@ -54,7 +54,9 @@ public static class StopBoard
 
             if (!Within(effective, nowUnix, behind, ahead)) continue;
 
-            var gone = effective < nowUnix && !StillShortOf(call, reckoned?.Bus ?? running);
+            var bus = reckoned?.Bus ?? running;
+            var gone = AlreadyThrough(call, bus)
+                || (effective < nowUnix && !StillShortOf(call, bus));
 
             board.Add(new BoardEntry(
                 call.LineId,
@@ -122,7 +124,7 @@ public static class StopBoard
         var there = call.Schedule.FirstOrDefault(stop => stop.StopId == atStopId);
         var here = call.Schedule.FirstOrDefault(stop => stop.StopSequence == call.StopSequence);
 
-        if (there is null || here is null || there.StopSequence >= call.StopSequence) return null;
+        if (there is null || here is null || there.StopSequence > call.StopSequence) return null;
 
         if (ScheduleReader.SecondsIntoDay(there.ArrivalTime) is not { } left) return null;
         if (ScheduleReader.SecondsIntoDay(here.ArrivalTime) is not { } arrives) return null;
@@ -137,6 +139,15 @@ public static class StopBoard
         var at = call.Schedule.FirstOrDefault(stop => stop.StopId == atStopId);
 
         return at is not null && at.StopSequence < call.StopSequence;
+    }
+
+    public static bool AlreadyThrough(ScheduledCall call, Vehicles.RunningBus? bus)
+    {
+        if (bus?.AtStopId is not { } atStopId) return false;
+
+        var at = call.Schedule.FirstOrDefault(stop => stop.StopId == atStopId);
+
+        return at is not null && at.StopSequence > call.StopSequence;
     }
 
     private static LiveEta? Matching(

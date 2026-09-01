@@ -318,9 +318,37 @@ public class StopBoardTests
     }
 
     [Fact]
-    public void ABusStandingAtOurOwnStopWorksNothingOut()
+    public void ABusStandingAtOurOwnStopIsArrivingNow()
     {
-        Assert.Null(StopBoard.EstimatedFromBus(Call(), new("42|2524", "110785", Now)));
+        Assert.Equal(Now, StopBoard.EstimatedFromBus(Call(), new("42|2524", "110785", Now)));
+    }
+
+    [Fact]
+    public void ADepartureWhoseBusIsFurtherAlongHasGoneByEvenIfItIsEarly()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["2753_0_1|1|3|1835"] = new("42|2524", "110999", Now)
+        };
+
+        var board = StopBoard.Build([Call(secondsAway: 600)], [], Now, Behind, Ahead, fleet);
+
+        Assert.Single(board);
+        Assert.True(board[0].IsPast);
+    }
+
+    [Fact]
+    public void ADepartureWhoseBusIsStillBehindIsNotGoneYet()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["2753_0_1|1|3|1835"] = new("42|2524", "110001", Now)
+        };
+
+        var board = StopBoard.Build([Call(secondsAway: 600)], [], Now, Behind, Ahead, fleet);
+
+        Assert.Single(board);
+        Assert.False(board[0].IsPast);
     }
 
     [Fact]

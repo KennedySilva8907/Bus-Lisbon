@@ -103,20 +103,5 @@ describe('a passage whose bus has stopped running', () => {
     expect(arrival.trip_running).toBe(true);
   });
 
-  it('does not call a time we worked out ourselves an observed arrival', () => {
-    const [arrival] = toPanelArrivals([
-      entry({ isPast: true, estimatedUnix: now - 600, fromTheBus: true }),
-    ]);
 
-    expect(arrival.observed_arrival_unix).toBeNull();
-    expect(arrival.went_by_unix).toBe(now - 600);
-  });
-
-  it('still counts one the operator published as an observed arrival', () => {
-    const [arrival] = toPanelArrivals([
-      entry({ isPast: true, estimatedUnix: now - 600, fromTheBus: false }),
-    ]);
-
-    expect(arrival.observed_arrival_unix).toBe(now - 600);
-  });
 });

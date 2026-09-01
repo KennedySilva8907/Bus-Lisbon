@@ -8,12 +8,11 @@ public class BoardArrivalsTests
 
     private static BoardEntry Entry(
         bool isPast = false, bool isRealtime = true, long estimated = Now + 300,
-        bool running = true, bool fromTheBus = false) =>
+        bool running = true) =>
         new(
             "[BNA17]2769", "[BNA17]2769_0_1", "Campo Grande",
             "[0277F][BNA17]2769_0_1|2|3|1230", "42|2548",
-            Now + 240, estimated, isPast ? estimated : Now + 240, isPast, isRealtime, running,
-            fromTheBus);
+            Now + 240, estimated, isPast ? estimated : Now + 240, isPast, isRealtime, running);
 
     [Fact]
     public void HandsTheAlertJobTheLineWithoutItsAgency()
@@ -62,12 +61,4 @@ public class BoardArrivalsTests
         Assert.Null(arrival.EstimatedArrivalUnix);
     }
 
-    [Fact]
-    public void WillNotPassOffATimeItWorkedOutAsAPassage()
-    {
-        var arrival = BoardArrivals.ToArrival(
-            Entry(isPast: true, estimated: Now - 120, fromTheBus: true));
-
-        Assert.Null(arrival.ObservedArrivalUnix);
-    }
 }

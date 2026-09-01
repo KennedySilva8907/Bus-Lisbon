@@ -9,7 +9,6 @@ export interface BoardEntry {
   isPast: boolean;
   isRealtime: boolean;
   tripRunning: boolean;
-  fromTheBus?: boolean;
 }
 
 export interface PanelArrival {
@@ -32,8 +31,7 @@ export function toPanelArrivals(board: BoardEntry[]): PanelArrival[] {
     headsign: entry.headsign,
     estimated_arrival_unix: entry.isPast ? 0 : entry.estimatedUnix,
     scheduled_arrival_unix: entry.scheduledUnix,
-    observed_arrival_unix:
-      entry.isPast && entry.isRealtime && !entry.fromTheBus ? entry.estimatedUnix : null,
+    observed_arrival_unix: entry.isPast && entry.isRealtime ? entry.estimatedUnix : null,
     went_by_unix: entry.isPast ? entry.estimatedUnix || entry.scheduledUnix : null,
     trip_running: entry.tripRunning,
     vehicle_id: entry.tripRunning ? entry.vehicleId : '',

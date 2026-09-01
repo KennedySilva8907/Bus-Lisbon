@@ -156,11 +156,11 @@ public class StopBoardTests
     }
 
     [Fact]
-    public void ADepartureIsNotGoneWhileItsBusIsStillShortOfTheStop()
+    public void ADepartureIsNotGoneWhileItsBusIsStillBehind()
     {
         var fleet = new Dictionary<string, RunningBus>
         {
-            ["2753_0_1|1|3|1835"] = new("42|2524", "110001")
+            ["2753_0_1|1|3|1835"] = new("42|2524", "110001", Now)
         };
 
         var board = StopBoard.Build([Call(secondsAway: -900)], [], Now, Behind, Ahead, fleet);
@@ -168,6 +168,20 @@ public class StopBoardTests
         Assert.Single(board);
         Assert.False(board[0].IsPast);
         Assert.True(board[0].TripRunning);
+    }
+
+    [Fact]
+    public void ADepartureIsNotGoneWhileItsBusIsHeadingForOurStop()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["2753_0_1|1|3|1835"] = new("42|2534", "110785", Now)
+        };
+
+        var board = StopBoard.Build([Call(secondsAway: -180)], [], Now, Behind, Ahead, fleet);
+
+        Assert.Single(board);
+        Assert.False(board[0].IsPast);
     }
 
     [Fact]
@@ -312,9 +326,25 @@ public class StopBoardTests
     }
 
     [Fact]
-    public void ABusAlreadyPastOurStopWorksNothingOut()
+    public void ABusAlreadyPastOurStopSaysWhenItWentBy()
     {
-        Assert.Null(StopBoard.EstimatedFromBus(Call(), new("42|2524", "110999", Now)));
+        Assert.Equal(Now - 600, StopBoard.EstimatedFromBus(Call(), new("42|2524", "110999", Now)));
+    }
+
+    [Fact]
+    public void ABusFromAnotherDepartureDoesNotEndOurs()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["2753_0_1|1|3|1835"] = new("41|1707", "110999", Now + 3600)
+        };
+
+        var board = StopBoard.Build([Call(secondsAway: 600)], [], Now, Behind, Ahead, fleet);
+
+        Assert.Single(board);
+        Assert.False(board[0].IsPast);
+        Assert.False(board[0].IsRealtime);
+        Assert.Equal(Now + 600, board[0].EffectiveUnix);
     }
 
     [Fact]

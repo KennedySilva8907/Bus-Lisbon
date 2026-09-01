@@ -54,7 +54,7 @@ public static class StopBoard
 
             if (!Within(effective, nowUnix, behind, ahead)) continue;
 
-            var gone = effective < nowUnix && !HasNotGoneBy(call, reckoned?.Bus ?? running);
+            var gone = effective < nowUnix && !HasNotGoneBy(call, reckoned?.Bus);
 
             board.Add(new BoardEntry(
                 call.LineId,

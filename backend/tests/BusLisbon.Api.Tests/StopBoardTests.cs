@@ -160,7 +160,7 @@ public class StopBoardTests
     {
         var fleet = new Dictionary<string, RunningBus>
         {
-            ["2753_0_1|1|3|1835"] = new("42|2524", "110001")
+            ["2753_0_1|1|3|1835"] = new("42|2524", "110001", Now)
         };
 
         var board = StopBoard.Build([Call(secondsAway: -900)], [], Now, Behind, Ahead, fleet);
@@ -175,7 +175,7 @@ public class StopBoardTests
     {
         var fleet = new Dictionary<string, RunningBus>
         {
-            ["2753_0_1|1|3|1835"] = new("42|2534", "110785")
+            ["2753_0_1|1|3|1835"] = new("42|2534", "110785", Now)
         };
 
         var board = StopBoard.Build([Call(secondsAway: -180)], [], Now, Behind, Ahead, fleet);

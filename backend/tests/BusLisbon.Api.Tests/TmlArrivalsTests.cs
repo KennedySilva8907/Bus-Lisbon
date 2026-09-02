@@ -78,6 +78,27 @@ public class TmlArrivalsTests : IDisposable
         Assert.True(dead.EtaUnix < 1787340120 - 4000);
     }
 
+    [Fact]
+    public async Task ReadsNoArrivalsFromAnAnswerWithNoContent()
+    {
+        _feed
+            .Given(Request.Create().WithPath("/hub/api/v1/realtime/eta/by-stop/*").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(204));
+
+        Assert.Empty(await BuildClient().GetApproachingAsync("110785", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ReadsNoArrivalsFromAnEmptyBody()
+    {
+        _feed
+            .Given(Request.Create().WithPath("/hub/api/v1/realtime/eta/by-stop/*").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(200)
+                .WithHeader("Content-Type", "application/json").WithBody(string.Empty));
+
+        Assert.Empty(await BuildClient().GetApproachingAsync("110785", CancellationToken.None));
+    }
+
     public void Dispose()
     {
         _feed.Stop();

@@ -60,13 +60,27 @@ public sealed partial class TmlArrivalsClient(HttpClient http) : ITmlArrivals
             ? (long)Math.Round(milliseconds / 1000)
             : null;
 
+    private async Task<TmlEnvelope<List<TmlArrival>>?> ReadEnvelopeAsync(
+        string stopId, CancellationToken cancellationToken)
+    {
+        using var answer = await http.GetAsync(
+            $"/hub/api/v1/realtime/eta/by-stop/{Uri.EscapeDataString(stopId)}", cancellationToken);
+
+        answer.EnsureSuccessStatusCode();
+
+        if (answer.Content.Headers.ContentLength is 0) return null;
+
+        var body = await answer.Content.ReadAsStringAsync(cancellationToken);
+
+        return string.IsNullOrWhiteSpace(body)
+            ? null
+            : JsonSerializer.Deserialize<TmlEnvelope<List<TmlArrival>>>(body, SerializerOptions);
+    }
+
     public async Task<Dictionary<string, ApproachingTrip>> GetApproachingAsync(
         string stopId, CancellationToken cancellationToken)
     {
-        var envelope = await http.GetFromJsonAsync<TmlEnvelope<List<TmlArrival>>>(
-            $"/hub/api/v1/realtime/eta/by-stop/{Uri.EscapeDataString(stopId)}",
-            SerializerOptions,
-            cancellationToken);
+        var envelope = await ReadEnvelopeAsync(stopId, cancellationToken);
 
         var approaching = new Dictionary<string, ApproachingTrip>();
 

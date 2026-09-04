@@ -45,9 +45,11 @@ public static class StopBoard
             var published = Matching(byTrip, call.TripKeys);
             var running = OnTheRoad(fleetByTrip, call.TripKeys);
             var reckoned = ClosestToTheSchedule(call, fleetByTrip);
+            var stillComing = HasNotGoneBy(call, reckoned?.Bus);
             var eta = published is not null
                 && Within(published.EstimatedUnix, nowUnix, behind, ahead)
                 && NearItsDeparture(published.EstimatedUnix, call.ScheduledUnix)
+                && !(published.EstimatedUnix < nowUnix && stillComing)
                     ? published
                     : null;
 
@@ -56,13 +58,7 @@ public static class StopBoard
 
             if (!Within(effective, nowUnix, behind, ahead)) continue;
 
-            var gone = effective < nowUnix && !HasNotGoneBy(call, reckoned?.Bus);
-
-            if (!gone && effective < nowUnix)
-            {
-                effective = nowUnix;
-                if (estimated != 0) estimated = nowUnix;
-            }
+            var gone = effective < nowUnix && !stillComing;
 
 
             board.Add(new BoardEntry(

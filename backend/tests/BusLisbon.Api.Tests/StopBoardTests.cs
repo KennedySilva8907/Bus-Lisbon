@@ -191,6 +191,23 @@ public class StopBoardTests
     }
 
     [Fact]
+    public void AnArrivalStillAheadOfUsIsNotShownAsAlreadyGone()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["2753_0_1|1|3|1835"] = new("42|2534", "110785", Now)
+        };
+
+        var board = StopBoard.Build(
+            [Call(secondsAway: 600)], [Eta(secondsAway: -120)], Now, Behind, Ahead, fleet);
+
+        Assert.Single(board);
+        Assert.False(board[0].IsPast);
+        Assert.Equal(Now, board[0].EffectiveUnix);
+        Assert.Equal(Now, board[0].EstimatedUnix);
+    }
+
+    [Fact]
     public void ADepartureIsNotGoneWhileItsBusIsHeadingForOurStop()
     {
         var fleet = new Dictionary<string, RunningBus>

@@ -191,20 +191,26 @@ public class StopBoardTests
     }
 
     [Fact]
-    public void AnArrivalStillAheadOfUsIsNotShownAsAlreadyGone()
+    public void DropsAPublishedTimeThatRanOutWhileTheBusIsStillComing()
     {
-        var fleet = new Dictionary<string, RunningBus>
-        {
-            ["2753_0_1|1|3|1835"] = new("42|2534", "110785", Now)
-        };
-
         var board = StopBoard.Build(
-            [Call(secondsAway: 600)], [Eta(secondsAway: -120)], Now, Behind, Ahead, fleet);
+            [Call(secondsAway: 600)], [Eta(secondsAway: -120)], Now, Behind, Ahead,
+            Fleet("110001", Now));
 
         Assert.Single(board);
         Assert.False(board[0].IsPast);
-        Assert.Equal(Now, board[0].EffectiveUnix);
-        Assert.Equal(Now, board[0].EstimatedUnix);
+        Assert.Equal(Now + 600, board[0].EffectiveUnix);
+        Assert.Equal("42|2524", board[0].VehicleId);
+    }
+
+    [Fact]
+    public void KeepsAPublishedTimeThatRanOutWhenNoBusSaysOtherwise()
+    {
+        var board = Build([Call(secondsAway: 600)], [Eta(secondsAway: -120)]);
+
+        Assert.Single(board);
+        Assert.True(board[0].IsPast);
+        Assert.Equal(Now - 120, board[0].EffectiveUnix);
     }
 
     [Fact]

@@ -47,12 +47,21 @@ export function arrivalsStopped({ newestUnix, nowUnix, busesOnTheRoad }) {
   return { stopped: true, behindMinutes };
 }
 
+function dataOf(payload) {
+  return Array.isArray(payload) ? payload : (payload?.data ?? []);
+}
+
 async function getJson(path, base = BASE) {
   let lastStatus = 0;
 
   for (let attempt = 1; attempt <= UPSTREAM_ATTEMPTS; attempt++) {
     const res = await fetch(`${base}${path}`, { headers: { accept: 'application/json' } });
-    if (res.ok) return res.json();
+
+    if (res.ok) {
+      const text = await res.text();
+
+      return text.trim().length === 0 ? null : JSON.parse(text);
+    }
 
     lastStatus = res.status;
     if (res.status < 500) break;
@@ -136,7 +145,7 @@ async function checkNetworkStops() {
   const name = 'hub network/stops';
   let stops;
   try {
-    stops = (await getJson('/network/stops', HUB)).data;
+    stops = dataOf(await getJson('/network/stops', HUB));
   } catch (e) {
     fail(name, `${e.message} — every board starts by resolving the stop here`);
     return;
@@ -200,7 +209,7 @@ async function checkTimetable() {
   for (const patternId of sampled) {
     let plans;
     try {
-      plans = (await getJson(`/network/patterns/${encodeURIComponent(patternId)}`, HUB)).data;
+      plans = dataOf(await getJson(`/network/patterns/${encodeURIComponent(patternId)}`, HUB));
     } catch (e) {
       fail(name, `${e.message} — the whole arrivals board is built from this`);
       return;
@@ -250,7 +259,7 @@ async function checkLiveEtas() {
 
   for (const stopId of sample) {
     try {
-      const data = (await getJson(`/realtime/eta/by-stop/${stopId}`, HUB)).data;
+      const data = dataOf(await getJson(`/realtime/eta/by-stop/${stopId}`, HUB));
       if (!Array.isArray(data)) {
         fail(name, `stop ${stopId} did not answer with a list`);
         return;
@@ -316,7 +325,7 @@ async function checkPositionsReadiness() {
 
   try {
     now = await getJson('/v2/vehicles');
-    next = (await getJson('/realtime/vehicles/positions', HUB)).data;
+    next = dataOf(await getJson('/realtime/vehicles/positions', HUB));
   } catch {
     return;
   }

@@ -58,6 +58,13 @@ public static class StopBoard
 
             var gone = effective < nowUnix && !HasNotGoneBy(call, reckoned?.Bus);
 
+            if (!gone && effective < nowUnix)
+            {
+                effective = nowUnix;
+                if (estimated != 0) estimated = nowUnix;
+            }
+
+
             board.Add(new BoardEntry(
                 call.LineId,
                 call.PatternId,

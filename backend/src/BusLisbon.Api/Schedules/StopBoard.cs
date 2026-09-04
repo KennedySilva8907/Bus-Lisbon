@@ -45,9 +45,11 @@ public static class StopBoard
             var published = Matching(byTrip, call.TripKeys);
             var running = OnTheRoad(fleetByTrip, call.TripKeys);
             var reckoned = ClosestToTheSchedule(call, fleetByTrip);
-            var eta = published is not null && Within(published.EstimatedUnix, nowUnix, behind, ahead)
-                ? published
-                : null;
+            var eta = published is not null
+                && Within(published.EstimatedUnix, nowUnix, behind, ahead)
+                && NearItsDeparture(published.EstimatedUnix, call.ScheduledUnix)
+                    ? published
+                    : null;
 
             var estimated = eta?.EstimatedUnix ?? reckoned?.EstimatedUnix ?? 0;
             var effective = estimated != 0 ? estimated : call.ScheduledUnix;
@@ -103,7 +105,7 @@ public static class StopBoard
 
             var off = estimated - call.ScheduledUnix;
 
-            if (Math.Abs(off) > (long)FarthestFromTheSchedule.TotalSeconds) continue;
+            if (!NearItsDeparture(estimated, call.ScheduledUnix)) continue;
             if (closest is not null && Math.Abs(off) >= Math.Abs(closest.OffScheduleSeconds)) continue;
 
             closest = new ReckonedArrival(bus, estimated, off);
@@ -111,6 +113,9 @@ public static class StopBoard
 
         return closest;
     }
+
+    public static bool NearItsDeparture(long estimatedUnix, long scheduledUnix) =>
+        Math.Abs(estimatedUnix - scheduledUnix) <= (long)FarthestFromTheSchedule.TotalSeconds;
 
     public static bool Within(long unix, long nowUnix, TimeSpan behind, TimeSpan ahead) =>
         unix >= nowUnix - (long)behind.TotalSeconds && unix <= nowUnix + (long)ahead.TotalSeconds;

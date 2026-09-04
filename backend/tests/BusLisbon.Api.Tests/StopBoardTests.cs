@@ -52,6 +52,26 @@ public class StopBoardTests
     }
 
     [Fact]
+    public void RefusesAPublishedTimeThatContradictsItsOwnDeparture()
+    {
+        var board = Build([Call(secondsAway: 4400)], [Eta(secondsAway: -60)]);
+
+        Assert.Single(board);
+        Assert.False(board[0].IsRealtime);
+        Assert.Equal(Now + 4400, board[0].EffectiveUnix);
+    }
+
+    [Fact]
+    public void KeepsAPublishedTimeThatIsMerelyLate()
+    {
+        var board = Build([Call(secondsAway: 240)], [Eta(secondsAway: 1500)]);
+
+        Assert.Single(board);
+        Assert.True(board[0].IsRealtime);
+        Assert.Equal(Now + 1500, board[0].EffectiveUnix);
+    }
+
+    [Fact]
     public void AnEstimateInThePastMeansTheBusHasGoneBy()
     {
         var board = Build([Call(secondsAway: 240)], [Eta(secondsAway: -42)]);

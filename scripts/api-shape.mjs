@@ -7,12 +7,24 @@ const SHAPE_FILE = new URL('./api-shape.json', import.meta.url);
 const SAMPLE = 40;
 const FOUND_CHANGES = 2;
 
+export function readBody(text) {
+  return text.trim().length === 0 ? null : JSON.parse(text);
+}
+
+export function dataOf(payload) {
+  return Array.isArray(payload) ? payload : (payload?.data ?? []);
+}
+
 async function getJson(url) {
   const response = await fetch(url, { headers: { accept: 'application/json' } });
 
-  if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
+  if (!response.ok) {
+    console.log(`  ${url} answered ${response.status}`);
 
-  return response.json();
+    return null;
+  }
+
+  return readBody(await response.text());
 }
 
 function typeOf(value) {
@@ -68,24 +80,24 @@ const PROBE_STOPS = ['110591', '110785', '120399', '020516', '060005', '170727']
 async function readShapes({ skipHeavy = false } = {}) {
   const shapes = {};
 
-  const vehicles = await getJson(`${BASE}/v2/vehicles`);
-  const positions = (await getJson(`${HUB}/realtime/vehicles/positions`)).data;
+  const vehicles = dataOf(await getJson(`${BASE}/v2/vehicles`));
+  const positions = dataOf(await getJson(`${HUB}/realtime/vehicles/positions`));
 
   if (!skipHeavy) {
-    shapes['carris /stops'] = shapeOf(await getJson(`${BASE}/stops`));
-    shapes['hub network/stops'] = shapeOf((await getJson(`${HUB}/network/stops`)).data);
+    shapes['carris /stops'] = shapeOf(dataOf(await getJson(`${BASE}/stops`)));
+    shapes['hub network/stops'] = shapeOf(dataOf(await getJson(`${HUB}/network/stops`)));
   }
 
-  const pattern = await getJson(`${BASE}/patterns/${encodeURIComponent(PROBE_PATTERN)}`);
-  const shape = pattern.shape_id ? await getJson(`${BASE}/shapes/${pattern.shape_id}`) : {};
-  const plans = (await getJson(`${HUB}/network/patterns/${encodeURIComponent(PROBE_AGENCY_PATTERN)}`)).data;
+  const pattern = (await getJson(`${BASE}/patterns/${encodeURIComponent(PROBE_PATTERN)}`)) ?? {};
+  const shape = (pattern.shape_id ? await getJson(`${BASE}/shapes/${pattern.shape_id}`) : {}) ?? {};
+  const plans = dataOf(await getJson(`${HUB}/network/patterns/${encodeURIComponent(PROBE_AGENCY_PATTERN)}`));
   const trips = plans.flatMap(plan => plan.trips ?? []);
   const calls = trips.flatMap(trip => trip.schedule ?? []);
 
   const etas = [];
 
   for (const stopId of PROBE_STOPS) {
-    etas.push(...((await getJson(`${HUB}/realtime/eta/by-stop/${stopId}`)).data ?? []));
+    etas.push(...dataOf(await getJson(`${HUB}/realtime/eta/by-stop/${stopId}`)));
   }
 
   shapes['carris /v2/vehicles'] = shapeOf(vehicles.filter(bus => bus.lat));

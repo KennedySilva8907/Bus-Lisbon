@@ -1,5 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { compare, spread } from './api-shape.mjs';
+import { compare, dataOf, readBody, spread } from './api-shape.mjs';
+
+describe('reading what upstream sent', () => {
+  it('takes an empty body as nothing rather than dying on it', () => {
+    expect(readBody('')).toBeNull();
+    expect(readBody('   \n ')).toBeNull();
+  });
+
+  it('still parses a real body', () => {
+    expect(readBody('{"data":[1]}')).toEqual({ data: [1] });
+  });
+
+  it('reads nothing out of an endpoint that answered with nothing', () => {
+    expect(dataOf(null)).toEqual([]);
+    expect(dataOf(undefined)).toEqual([]);
+    expect(dataOf({})).toEqual([]);
+  });
+
+  it('unwraps the envelope, and leaves a bare list alone', () => {
+    expect(dataOf({ data: [1, 2] })).toEqual([1, 2]);
+    expect(dataOf([1, 2])).toEqual([1, 2]);
+  });
+});
 
 const recorded = {
   'hub realtime/eta/by-stop/{id}': {

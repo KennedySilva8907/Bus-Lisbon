@@ -35,7 +35,8 @@ public sealed class TmlNetworkClient(HttpClient http) : ITmlNetwork
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
-        NumberHandling = JsonNumberHandling.AllowReadingFromString
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+        Converters = { new TextOrNumber() }
     };
 
     public async Task<IReadOnlyList<TmlStop>> GetStopsAsync(CancellationToken cancellationToken)

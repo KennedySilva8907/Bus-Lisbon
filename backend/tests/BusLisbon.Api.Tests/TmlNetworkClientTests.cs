@@ -81,6 +81,27 @@ public class TmlNetworkClientTests : IDisposable
         Assert.Empty(await BuildClient().GetPatternAsync("[X]1_0_1", CancellationToken.None));
     }
 
+    private const string ServiceDaysAsNumbers = """
+        {"data":[
+          {"_id":"[LA77N]1713_0_2","line_id":"[LA77N]1713","headsign":"Current",
+           "trips":[{"schedule":[{"arrival_time":"08:00:00","stop_id":"120399","stop_sequence":3}],
+                     "trip_ids":["[9XPQ2][LA77N]1713_0_2_0800"],"valid_on":[20260821,20260822]}]}
+        ]}
+        """;
+
+    [Fact]
+    public async Task ReadsAServiceDaySentAsANumber()
+    {
+        _network
+            .Given(Request.Create().WithPath("/hub/api/v1/network/patterns/*").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(200)
+                .WithHeader("Content-Type", "application/json").WithBody(ServiceDaysAsNumbers));
+
+        var plans = await BuildClient().GetPatternAsync("[LA77N]1713_0_2", CancellationToken.None);
+
+        Assert.Equal(["20260821", "20260822"], plans[0].Trips[0].ValidOn);
+    }
+
     public void Dispose()
     {
         _network.Stop();

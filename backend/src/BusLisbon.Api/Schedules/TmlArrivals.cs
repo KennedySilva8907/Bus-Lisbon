@@ -31,7 +31,8 @@ public sealed partial class TmlArrivalsClient(HttpClient http) : ITmlArrivals
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
-        NumberHandling = JsonNumberHandling.AllowReadingFromString
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+        Converters = { new TextOrNumber() }
     };
 
     [GeneratedRegex(@"^(?:\[[^\]]+\])+")]

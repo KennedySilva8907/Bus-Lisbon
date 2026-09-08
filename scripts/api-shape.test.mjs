@@ -1,5 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { compare, dataOf, readBody, spread } from './api-shape.mjs';
+import { compare, dataOf, insideOf, readBody, spread, typeOf } from './api-shape.mjs';
+
+describe('what a field looks like', () => {
+  it('says what an array is made of, so a list of dates changing type shows up', () => {
+    expect(typeOf(['20260821'])).toBe('array of string');
+    expect(typeOf([20260821])).toBe('array of number');
+    expect(typeOf(['20260821'])).not.toBe(typeOf([20260821]));
+  });
+
+  it('names an empty list rather than guessing', () => {
+    expect(typeOf([])).toBe('array of nothing');
+  });
+
+  it('lists every kind a mixed array holds', () => {
+    expect(insideOf([1, 'a', null])).toBe('null|number|string');
+    expect(typeOf([{ a: 1 }])).toBe('array of object');
+  });
+
+  it('leaves everything else alone', () => {
+    expect(typeOf(null)).toBe('null');
+    expect(typeOf(3)).toBe('number');
+    expect(typeOf('x')).toBe('string');
+  });
+});
 
 describe('reading what upstream sent', () => {
   it('takes an empty body as nothing rather than dying on it', () => {

@@ -40,8 +40,10 @@ export function toVehicle(payload: GatewayVehicleResponse): Vehicle {
   };
 }
 
+const FLEET_VEHICLE_ID = /^(\d+\|\d+|\[[^\]]+\]\d+)$/;
+
 export function isFleetVehicleId(vehicleId: string | null | undefined): boolean {
-  return typeof vehicleId === 'string' && /^\d+\|\d+$/.test(vehicleId);
+  return typeof vehicleId === 'string' && FLEET_VEHICLE_ID.test(vehicleId);
 }
 
 export interface StreamSubscription {

@@ -38,6 +38,23 @@ export function openVehicleStream(
   return connection.start().then(subscribe, () => onLive(false));
 }
 
+export interface ReceivedPosition {
+  target: string;
+  vehicle: Vehicle;
+}
+
+export function keepTheNewer(
+  held: ReceivedPosition | null,
+  target: string,
+  vehicle: Vehicle
+): ReceivedPosition {
+  if (held && held.target === target && (held.vehicle.timestamp ?? 0) > (vehicle.timestamp ?? 0)) {
+    return held;
+  }
+
+  return { target, vehicle };
+}
+
 export function useVehicleStream(
   vehicleId: string | null,
   lineId?: string | null,
@@ -46,7 +63,7 @@ export function useVehicleStream(
   const target = vehicleId || lineId ? `${vehicleId ?? ''}|${lineId ?? ''}|${patternId ?? ''}` : '';
   const enabled = GATEWAY_BASE.length > 0 && target !== '';
 
-  const [received, setReceived] = useState<{ target: string; vehicle: Vehicle } | null>(null);
+  const [received, setReceived] = useState<ReceivedPosition | null>(null);
   const [liveTarget, setLiveTarget] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,7 +78,11 @@ export function useVehicleStream(
       .build();
 
     connection.on('vehicleUpdated', (payload: GatewayVehicleResponse) => {
-      if (!cancelled) setReceived({ target, vehicle: toVehicle(payload) });
+      if (cancelled) return;
+
+      const vehicle = toVehicle(payload);
+
+      setReceived(held => keepTheNewer(held, target, vehicle));
     });
 
     void openVehicleStream(connection, { vehicleId: vehicleId ?? null, lineId: lineId ?? null, patternId: patternId ?? null }, live => {

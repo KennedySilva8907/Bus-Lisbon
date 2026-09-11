@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { freshestVehicle, openVehicleStream, type StreamConnection } from './realtime';
+import { freshestVehicle, keepTheNewer, openVehicleStream, type StreamConnection } from './realtime';
 import type { Vehicle } from './api';
 
 class FakeConnection implements StreamConnection {
@@ -146,6 +146,31 @@ const at = (lat: number, timestamp: number): Vehicle => ({
   bearing: 0,
   speed: 10,
   timestamp,
+});
+
+describe('keepTheNewer', () => {
+  it('takes the first position there is', () => {
+    expect(keepTheNewer(null, 'v', at(38.1, 100))).toEqual({ target: 'v', vehicle: at(38.1, 100) });
+  });
+
+  it('takes a position reported later', () => {
+    const held = { target: 'v', vehicle: at(38.1, 100) };
+
+    expect(keepTheNewer(held, 'v', at(38.2, 200))).toEqual({ target: 'v', vehicle: at(38.2, 200) });
+  });
+
+  it('ignores a frame older than the one it is holding', () => {
+    const held = { target: 'v', vehicle: at(38.1, 200) };
+
+    expect(keepTheNewer(held, 'v', at(38.2, 100))).toBe(held);
+  });
+
+  it('starts over when the selection changed', () => {
+    const held = { target: 'v', vehicle: at(38.1, 200) };
+
+    expect(keepTheNewer(held, 'other', at(38.2, 100)))
+      .toEqual({ target: 'other', vehicle: at(38.2, 100) });
+  });
 });
 
 describe('freshestVehicle', () => {

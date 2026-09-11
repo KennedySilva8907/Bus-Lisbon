@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { arrivalsStopped } from './api-contract-check.mjs';
+import { arrivalsStopped, onTheOldHost, runsOn } from './api-contract-check.mjs';
 
 const now = 1787950000;
 const minutesAgo = m => now - (m * 60);
@@ -37,5 +37,31 @@ describe('arrivalsStopped', () => {
   it('says nothing when there was no time to read', () => {
     expect(arrivalsStopped({ newestUnix: NaN, nowUnix: now, busesOnTheRoad: 900 })).toBeNull();
     expect(arrivalsStopped({ newestUnix: -Infinity, nowUnix: now, busesOnTheRoad: 900 })).toBeNull();
+  });
+});
+
+describe('runsOn', () => {
+  it('matches a service day sent as text', () => {
+    expect(runsOn({ valid_on: ['20260910', '20260911'] }, '20260911')).toBe(true);
+  });
+
+  it('matches the same day sent as a number', () => {
+    expect(runsOn({ valid_on: [20260910, 20260911] }, '20260911')).toBe(true);
+  });
+
+  it('says no when the day is not in the list', () => {
+    expect(runsOn({ valid_on: [20260910] }, '20260911')).toBe(false);
+    expect(runsOn({}, '20260911')).toBe(false);
+  });
+});
+
+describe('onTheOldHost', () => {
+  it('drops the brackets the vehicles feed puts on a pattern id', () => {
+    expect(onTheOldHost('[XS3H8][LA77N]1223_0_2')).toBe('1223_0_2');
+    expect(onTheOldHost('[BNA17]2812_0_2')).toBe('2812_0_2');
+  });
+
+  it('leaves a plain id alone', () => {
+    expect(onTheOldHost('1523_0_1')).toBe('1523_0_1');
   });
 });

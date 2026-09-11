@@ -81,6 +81,11 @@ describe('isFleetVehicleId', () => {
     expect(isFleetVehicleId('42|2512')).toBe(true);
   });
 
+  it('accepts the bracketed ids the fleet feed sends now', () => {
+    expect(isFleetVehicleId('[BNA17]2547')).toBe(true);
+    expect(isFleetVehicleId('[LA77N]1130')).toBe(true);
+  });
+
   it('rejects the bare numbers the arrivals feed sends', () => {
     expect(isFleetVehicleId('2600')).toBe(false);
     expect(isFleetVehicleId('544')).toBe(false);
@@ -99,6 +104,11 @@ describe('gatewayVehicleUrl with an arrivals-feed id', () => {
       .toBe('https://api.example/api/vehicles/by-line/2769?patternId=2769_0_1');
   });
 
+  it('goes straight to the vehicle when the id is a bracketed fleet one', () => {
+    expect(gatewayVehicleUrl('https://api.example', '[BNA17]2547', '2812', '2812_0_2', '[BNA17]2812_0_2|7|2|1230'))
+      .toBe('https://api.example/api/vehicles/%5BBNA17%5D2547');
+  });
+
   it('still goes straight to the vehicle when the id is a fleet one', () => {
     expect(gatewayVehicleUrl('https://api.example', '42|2512', '2769', '2769_0_1'))
       .toBe('https://api.example/api/vehicles/42%7C2512');
@@ -109,6 +119,11 @@ describe('streamSubscriptionFor', () => {
   it('follows a fleet vehicle by its own id', () => {
     expect(streamSubscriptionFor('42|2524', '2812', '[0277F][BNA17]2812_0_2|2|3|1200'))
       .toEqual({ vehicleId: '42|2524', lineId: null });
+  });
+
+  it('follows a bracketed fleet vehicle by its own id', () => {
+    expect(streamSubscriptionFor('[BNA17]2547', '2812', '[BNA17]2812_0_2|7|2|1230'))
+      .toEqual({ vehicleId: '[BNA17]2547', lineId: null });
   });
 
   it('subscribes to nothing when the trip is known but the id is not the fleet one', () => {

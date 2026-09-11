@@ -1,3 +1,4 @@
+﻿using System.Text.Json;
 using BusLisbon.Api.Carris;
 using BusLisbon.Api.Vehicles;
 
@@ -76,6 +77,20 @@ public class VehicleFilterTests
 
         Assert.False(VehicleFilter.IsLive(Live(timestamp: pastBoundary), Now));
     }
+
+    [Fact]
+    public void IsLive_RejectsAStaleFixThatArrivedInMilliseconds()
+    {
+        var hoursAgo = (Now.ToUnixTimeSeconds() - 7200) * 1000;
+        var wire = $$"""
+            {"id":"41|300","lat":38.7856,"lon":-9.3037,"timestamp":{{hoursAgo}}}
+            """;
+
+        var vehicle = JsonSerializer.Deserialize<CarrisVehicle>(wire)!;
+
+        Assert.False(VehicleFilter.IsLive(vehicle, Now));
+    }
+
 
     [Fact]
     public void IsLive_SkipsTheFreshnessCheckWhenTheTimestampIsAbsentOrZero()

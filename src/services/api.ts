@@ -87,6 +87,12 @@ export function useStops() {
 // the freshness check a "track by line" tap could lock onto a parked bus and
 // pin it to the map at a position from hours ago.
 const VEHICLE_FRESH_WINDOW_SEC = 300;
+const SMALLEST_MILLISECOND_READING = 100_000_000_000;
+
+export function reportedSeconds(timestamp?: number): number | undefined {
+  if (!timestamp) return undefined;
+  return Math.abs(timestamp) >= SMALLEST_MILLISECOND_READING ? Math.floor(timestamp / 1000) : timestamp;
+}
 
 function isLiveVehicle(v: Vehicle): boolean {
   if (!v.id || v.id === '|undefined') return false;
@@ -94,7 +100,8 @@ function isLiveVehicle(v: Vehicle): boolean {
   const lon = Number(v.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
   if (lat === 0 && lon === 0) return false;
-  if (v.timestamp && Date.now() / 1000 - v.timestamp > VEHICLE_FRESH_WINDOW_SEC) return false;
+  const reported = reportedSeconds(v.timestamp);
+  if (reported && Date.now() / 1000 - reported > VEHICLE_FRESH_WINDOW_SEC) return false;
   return true;
 }
 

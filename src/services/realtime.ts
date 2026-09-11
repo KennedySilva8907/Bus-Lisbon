@@ -85,5 +85,13 @@ export function freshestVehicle(
   connected: boolean,
   polled: Vehicle | null
 ): Vehicle | null {
-  return connected ? streamed ?? polled : polled ?? streamed;
+  if (!streamed) return polled;
+  if (!polled) return streamed;
+
+  const streamedAt = streamed.timestamp ?? 0;
+  const polledAt = polled.timestamp ?? 0;
+
+  if (streamedAt !== polledAt) return streamedAt > polledAt ? streamed : polled;
+
+  return connected ? streamed : polled;
 }

@@ -149,12 +149,17 @@ const at = (lat: number, timestamp: number): Vehicle => ({
 });
 
 describe('freshestVehicle', () => {
-  it('prefers the stream while it is connected', () => {
-    expect(freshestVehicle(at(38.1, 100), true, at(38.2, 200))).toEqual(at(38.1, 100));
+  it('takes the newer position even when the stream is connected', () => {
+    expect(freshestVehicle(at(38.1, 100), true, at(38.2, 200))).toEqual(at(38.2, 200));
   });
 
-  it('prefers the poll once the stream is gone, however recent its last position was', () => {
-    expect(freshestVehicle(at(38.1, 100), false, at(38.2, 200))).toEqual(at(38.2, 200));
+  it('keeps the newer streamed position when the stream drops', () => {
+    expect(freshestVehicle(at(38.1, 200), false, at(38.2, 100))).toEqual(at(38.1, 200));
+  });
+
+  it('prefers the stream when both sides report the same moment', () => {
+    expect(freshestVehicle(at(38.1, 200), true, at(38.2, 200))).toEqual(at(38.1, 200));
+    expect(freshestVehicle(at(38.1, 200), false, at(38.2, 200))).toEqual(at(38.2, 200));
   });
 
   it('keeps the last streamed position when the poll has nothing yet', () => {

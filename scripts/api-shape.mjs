@@ -27,9 +27,16 @@ async function getJson(url) {
   return readBody(await response.text());
 }
 
-function typeOf(value) {
+export function insideOf(values) {
+  const kinds = [...new Set(values.map(v =>
+    v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v))].sort();
+
+  return kinds.length === 0 ? 'nothing' : kinds.join('|');
+}
+
+export function typeOf(value) {
   if (value === null) return 'null';
-  if (Array.isArray(value)) return 'array';
+  if (Array.isArray(value)) return `array of ${insideOf(value)}`;
 
   return typeof value;
 }

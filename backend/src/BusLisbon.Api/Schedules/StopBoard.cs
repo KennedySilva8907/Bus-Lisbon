@@ -1,4 +1,4 @@
-namespace BusLisbon.Api.Schedules;
+﻿namespace BusLisbon.Api.Schedules;
 
 public sealed record BoardEntry(
     string LineId,
@@ -123,14 +123,24 @@ public static class StopBoard
     public static bool Within(long unix, long nowUnix, TimeSpan behind, TimeSpan ahead) =>
         unix >= nowUnix - (long)behind.TotalSeconds && unix <= nowUnix + (long)ahead.TotalSeconds;
 
+    public static bool HasNotReachedIt(string? status) =>
+        status is "IN_TRANSIT_TO" or "INCOMING_AT";
+
     public static long? EstimatedFromBus(ScheduledCall call, Vehicles.RunningBus? bus)
     {
         if (bus?.AtStopId is not { } atStopId || bus.ReportedAtUnix <= 0) return null;
 
-        var there = call.Schedule.FirstOrDefault(stop => stop.StopId == atStopId);
+        var heading = call.Schedule.FirstOrDefault(stop => stop.StopId == atStopId);
         var here = call.Schedule.FirstOrDefault(stop => stop.StopSequence == call.StopSequence);
 
-        if (there is null || here is null) return null;
+        if (heading is null || here is null) return null;
+
+        var there = HasNotReachedIt(bus.Status)
+            ? call.Schedule
+                .Where(stop => stop.StopSequence < heading.StopSequence)
+                .OrderByDescending(stop => stop.StopSequence)
+                .FirstOrDefault() ?? heading
+            : heading;
 
         if (ScheduleReader.SecondsIntoDay(there.ArrivalTime) is not { } left) return null;
         if (ScheduleReader.SecondsIntoDay(here.ArrivalTime) is not { } arrives) return null;

@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace BusLisbon.Api.Carris;
 
@@ -35,5 +35,6 @@ public sealed record CarrisVehicle
     public string? StopId { get; init; }
 
     [JsonPropertyName("timestamp")]
+    [JsonConverter(typeof(UnixSeconds))]
     public long? Timestamp { get; init; }
 }

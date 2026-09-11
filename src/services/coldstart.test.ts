@@ -106,6 +106,12 @@ describe('pickFromFleet', () => {
     expect(pickFromFleet([stale], '41|1')).toBeNull();
   });
 
+  it('ignores a bus whose position is hours old and sent in milliseconds', () => {
+    const stale = bus('41|1', { timestamp: (Math.floor(Date.now() / 1000) - 7200) * 1000 });
+
+    expect(pickFromFleet([stale], '41|1')).toBeNull();
+  });
+
   it('has nothing to give before the feed arrives', () => {
     expect(pickFromFleet(undefined, '41|1')).toBeNull();
   });

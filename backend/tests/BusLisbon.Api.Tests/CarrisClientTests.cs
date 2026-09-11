@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using BusLisbon.Api.Carris;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -62,6 +62,23 @@ public class CarrisClientTests : IDisposable
         Assert.Equal("|undefined", vehicles[1].Id);
         Assert.Null(vehicles[1].Lat);
     }
+
+    [Fact]
+    public async Task GetVehiclesAsync_ReadsAReportTimeSentInMilliseconds()
+    {
+        const string InMilliseconds = """
+            [{"id":"41|300","lat":38.7856,"lon":-9.3037,"line_id":"1209","pattern_id":"1209_1_1","trip_id":"t1","timestamp":1786009950000}]
+            """;
+
+        _carris.Given(Request.Create().WithPath("/v2/vehicles").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(200)
+                .WithHeader("Content-Type", "application/json").WithBody(InMilliseconds));
+
+        var vehicles = await BuildClient().GetVehiclesAsync(CancellationToken.None);
+
+        Assert.Equal(1_786_009_950, vehicles[0].Timestamp);
+    }
+
 
     [Fact]
     public async Task GetVehiclesAsync_RetriesAfterATransientFailure()

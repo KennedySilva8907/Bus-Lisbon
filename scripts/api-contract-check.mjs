@@ -79,6 +79,14 @@ function isFiniteNum(v) {
 // (no hardcoded stop/pattern ids that could be retired by Carris).
 const discovered = { stopId: null, patternId: null, stopIds: [], network: null, networkStop: null, busesOnTheRoad: 0 };
 
+export function runsOn(trip, day) {
+  return (trip?.valid_on ?? []).some(value => String(value) === day);
+}
+
+export function onTheOldHost(patternId) {
+  return String(patternId ?? '').replace(/\[[^\]]+\]/g, '');
+}
+
 function operationalDay() {
   const lisbon = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Lisbon' }));
   if (lisbon.getHours() < 4) lisbon.setDate(lisbon.getDate() - 1);
@@ -235,7 +243,7 @@ async function checkTimetable() {
       }
     }
 
-    runningToday += trips.filter(t => (t.valid_on ?? []).includes(today)).length;
+    runningToday += trips.filter(t => runsOn(t, today)).length;
   }
 
   if (plansSeen === 0) {
@@ -405,7 +413,7 @@ async function checkStops() {
 // ── 4. Pattern + shape (route line on the map) ─────────────────────────
 async function checkPatternShape() {
   const name = '/patterns/:id + /shapes/:id';
-  const patternId = discovered.patternId || '1523_0_1';
+  const patternId = onTheOldHost(discovered.patternId) || '1523_0_1';
   let pattern;
   try {
     pattern = await getJson(`/patterns/${patternId}`);

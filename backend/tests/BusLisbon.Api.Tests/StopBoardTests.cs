@@ -1,4 +1,4 @@
-using BusLisbon.Api.Schedules;
+﻿using BusLisbon.Api.Schedules;
 using BusLisbon.Api.Vehicles;
 
 namespace BusLisbon.Api.Tests;
@@ -263,6 +263,35 @@ public class StopBoardTests
 
         Assert.Single(board);
         Assert.True(board[0].IsPast);
+    }
+
+    [Fact]
+    public void ABusStillOnItsWayToOurStopHasTheRestOfTheLegAdded()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["2753_0_1|1|3|1835"] = new("42|2524", "110785", Now + 90, "IN_TRANSIT_TO"),
+        };
+
+        var board = StopBoard.Build([Call(secondsAway: 600)], [], Now, Behind, Ahead, fleet);
+
+        Assert.Single(board);
+        Assert.True(board[0].IsRealtime);
+        Assert.Equal(Now + 90 + 600, board[0].EffectiveUnix);
+    }
+
+    [Fact]
+    public void ABusStandingAtAStopIsTakenToBeThere()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["2753_0_1|1|3|1835"] = new("42|2524", "110001", Now + 90, "STOPPED_AT"),
+        };
+
+        var board = StopBoard.Build([Call(secondsAway: 600)], [], Now, Behind, Ahead, fleet);
+
+        Assert.Single(board);
+        Assert.Equal(Now + 90 + 600, board[0].EffectiveUnix);
     }
 
     private static Dictionary<string, RunningBus> Fleet(string atStopId, long reportedAt) =>

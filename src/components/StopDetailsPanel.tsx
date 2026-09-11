@@ -1,5 +1,5 @@
 import { useStopETA, type Stop, type ETA } from '../services/api';
-import { anyArrivalTime, describeArrival, describePassage, describePunctuality, wentByAt, type PunctualityTone } from '../services/arrivals';
+import { anyArrivalTime, countdownLabel, describeArrival, describePassage, describePunctuality, wentByAt, type PunctualityTone } from '../services/arrivals';
 import { fromUnixTime } from 'date-fns';
 import { X, Star, ChevronUp } from 'lucide-react';
 import { useRef, useEffect, useState, useMemo } from 'react';
@@ -358,11 +358,6 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
               ) : (
                 futureEtas.map((eta, i) => {
                   const time = eta.estimated_arrival_unix || eta.scheduled_arrival_unix;
-                  const diffSec = time - nowUnix;
-                  // Align the countdown with the clock time shown below it: the
-                  // absolute time uses HH:mm (seconds truncated), so the user
-                  // computes "arrival_min − current_min". Matching that math
-                  // here keeps both numbers consistent — see #ETA-display.
                   const diffMinutes = Math.floor(time / 60) - Math.floor(nowUnix / 60);
                   const arrival = describeArrival(eta);
                   const hasVehicle = arrival.trackable;
@@ -379,21 +374,7 @@ export default function StopDetailsPanel({ stop, onClose, isExpanded, onToggleEx
                     else { directionLabel = 'Pontual'; directionColor = 'text-green-400'; directionBg = 'bg-green-400/10'; }
                   }
 
-                  let displayTime: string;
-                  if (diffSec < -60) {
-                    displayTime = '';
-                  } else if (diffSec <= 30) {
-                    displayTime = 'Agora';
-                  } else if (diffMinutes <= 0) {
-                    // Same clock minute as "now" but still 31–59s away
-                    displayTime = '<1min';
-                  } else if (diffMinutes < 60) {
-                    displayTime = `${diffMinutes}min`;
-                  } else {
-                    const hours = Math.floor(diffMinutes / 60);
-                    const mins = diffMinutes % 60;
-                    displayTime = `${hours}h${mins > 0 ? String(mins).padStart(2, '0') : ''}`;
-                  }
+                  const displayTime = countdownLabel(time, nowUnix);
 
                   return (
                     <div

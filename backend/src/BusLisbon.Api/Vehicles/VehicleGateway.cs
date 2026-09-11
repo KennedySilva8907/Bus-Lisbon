@@ -1,11 +1,11 @@
-using BusLisbon.Api.Carris;
+﻿using BusLisbon.Api.Carris;
 using Microsoft.Extensions.Options;
 
 namespace BusLisbon.Api.Vehicles;
 
 public sealed record VehicleGatewayStatus(int LiveVehicles, double? AgeSeconds, bool Stale);
 
-public sealed record RunningBus(string VehicleId, string? AtStopId, long ReportedAtUnix = 0);
+public sealed record RunningBus(string VehicleId, string? AtStopId, long ReportedAtUnix = 0, string? Status = null);
 
 public sealed class VehicleGateway(
     ICarrisClient client,
@@ -56,7 +56,7 @@ public sealed class VehicleGateway(
             if (trip.Length > 0)
             {
                 byTrip[trip] = new RunningBus(
-                    vehicle.Id, NetworkStopOf(vehicle), vehicle.Timestamp ?? 0);
+                    vehicle.Id, NetworkStopOf(vehicle), vehicle.Timestamp ?? 0, vehicle.CurrentStatus);
             }
         }
 

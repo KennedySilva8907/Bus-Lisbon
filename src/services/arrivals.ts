@@ -61,3 +61,17 @@ export function describeArrival(eta: ETA): ArrivalDescription {
     label: predicted ? 'Previsto · ainda sem autocarro' : 'Agendado · ainda sem autocarro',
   };
 }
+
+export function countdownLabel(arrivalUnix: number, nowUnix: number): string {
+  const diffSec = arrivalUnix - nowUnix;
+  const diffMinutes = Math.floor(arrivalUnix / 60) - Math.floor(nowUnix / 60);
+
+  if (diffSec <= 30) return 'Agora';
+  if (diffMinutes <= 0) return '<1min';
+  if (diffMinutes < 60) return `${diffMinutes}min`;
+
+  const hours = Math.floor(diffMinutes / 60);
+  const mins = diffMinutes % 60;
+
+  return `${hours}h${mins > 0 ? String(mins).padStart(2, '0') : ''}`;
+}

@@ -97,6 +97,8 @@ public static class StopBoard
 
     public static readonly TimeSpan FarthestFromTheSchedule = TimeSpan.FromMinutes(30);
 
+    public static readonly TimeSpan FarthestOffALoop = TimeSpan.FromHours(2);
+
     public static ReckonedArrival? ClosestToTheSchedule(
         ScheduledCall call, IReadOnlyDictionary<string, Vehicles.RunningBus>? fleetByTrip)
     {
@@ -111,7 +113,7 @@ public static class StopBoard
 
             var off = estimated - call.ScheduledUnix;
 
-            if (!NearItsDeparture(estimated, call.ScheduledUnix)) continue;
+            if (!CloseEnoughFor(call, bus, estimated)) continue;
             if (closest is not null && Math.Abs(off) >= Math.Abs(closest.OffScheduleSeconds)) continue;
 
             closest = new ReckonedArrival(bus, estimated, off);
@@ -119,6 +121,17 @@ public static class StopBoard
 
         return closest;
     }
+
+    public static bool CloseEnoughFor(ScheduledCall call, Vehicles.RunningBus bus, long estimatedUnix) =>
+        NearItsDeparture(estimatedUnix, call.ScheduledUnix)
+        || (!IsALoop(call)
+            && estimatedUnix > call.ScheduledUnix
+            && estimatedUnix - call.ScheduledUnix <= (long)FarthestOffALoop.TotalSeconds
+            && HasNotGoneBy(call, bus));
+
+    public static bool IsALoop(ScheduledCall call) =>
+        call.Schedule.Count > 1
+        && call.Schedule.MinBy(stop => stop.StopSequence)!.StopId == call.Schedule.MaxBy(stop => stop.StopSequence)!.StopId;
 
     public static bool NearItsDeparture(long estimatedUnix, long scheduledUnix) =>
         Math.Abs(estimatedUnix - scheduledUnix) <= (long)FarthestFromTheSchedule.TotalSeconds;

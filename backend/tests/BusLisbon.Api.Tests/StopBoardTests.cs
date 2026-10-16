@@ -17,6 +17,14 @@ public class StopBoardTests
         new() { ArrivalTime = "18:40:00", StopId = "110999", StopSequence = 9 },
     ];
 
+    private static readonly TmlScheduleEntry[] AroundTheLoop =
+    [
+        new() { ArrivalTime = "18:20:00", StopId = "110001", StopSequence = 1 },
+        new() { ArrivalTime = "18:30:00", StopId = "110785", StopSequence = 5 },
+        new() { ArrivalTime = "18:40:00", StopId = "110999", StopSequence = 9 },
+        new() { ArrivalTime = "18:50:00", StopId = "110001", StopSequence = 12 },
+    ];
+
     private static ScheduledCall Call(
         string departure = "1835", long secondsAway = 240, bool last = false) =>
         new("2753", "[BNA17]2753_0_1", "Milharado",
@@ -332,7 +340,34 @@ public class StopBoardTests
 
     private static ScheduledCall Circular(params string[] tripKeys) =>
         new("4001", "[A2L1N]4001_0_3", "Alcochete | Circular",
-            tripKeys, Now + 600, false, 5, AlongTheRoute);
+            tripKeys, Now + 600, false, 5, AroundTheLoop);
+
+    [Fact]
+    public void KeepsAVeryLateBusOnARouteThatIsNotALoop()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["2753_0_1|1|3|1835"] = new("42|2524", "110001", Now + 2700, "IN_TRANSIT_TO"),
+        };
+
+        var board = StopBoard.Build([Call(secondsAway: -2100)], [], Now, Behind, Ahead, fleet);
+
+        Assert.Single(board);
+        Assert.False(board[0].IsPast);
+        Assert.True(board[0].IsRealtime);
+        Assert.Equal("42|2524", board[0].VehicleId);
+    }
+
+    [Fact]
+    public void StillRefusesABusMoreThanTwoHoursOffEvenOffALoop()
+    {
+        var fleet = new Dictionary<string, RunningBus>
+        {
+            ["2753_0_1|1|3|1835"] = new("42|2524", "110001", Now + 3 * 3600),
+        };
+
+        Assert.Null(StopBoard.ClosestToTheSchedule(Call(secondsAway: 0), fleet));
+    }
 
     [Fact]
     public void TakesTheBusClosestToTheTimetableNotTheFirstItFinds()

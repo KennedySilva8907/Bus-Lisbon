@@ -294,6 +294,39 @@ public class StopBoardTests
         Assert.Equal(Now + 90 + 600, board[0].EffectiveUnix);
     }
 
+    private static readonly Place OurStop = new(38.78965, -9.168446);
+
+    private static readonly Dictionary<string, RunningBus> StandingAtOurStop =
+        new() { ["2753_0_1|1|3|1835"] = new("42|2524", "110785", Now - 30, "STOPPED_AT", 38.78800, -9.168446) };
+
+    [Fact]
+    public void ABusReportedAtOurStopHasNotGoneByDefault()
+    {
+        var board = StopBoard.Build([Call(secondsAway: -60)], [], Now, Behind, Ahead, StandingAtOurStop);
+
+        Assert.Single(board);
+        Assert.False(board[0].IsPast);
+    }
+
+    [Fact]
+    public void ABusTheRouteShowsPastOurStopHasGone()
+    {
+        var board = StopBoard.Build(
+            [Call(secondsAway: -60)], [], Now, Behind, Ahead, StandingAtOurStop, new HashSet<string> { "42|2524" });
+
+        Assert.Single(board);
+        Assert.True(board[0].IsPast);
+    }
+
+    [Fact]
+    public void OnlyABusStandingFarFromOurStopIsWorthCheckingOnTheRoute()
+    {
+        Assert.True(StopBoard.MightHaveLeft(new("42|2524", "110785", 0, "STOPPED_AT", 38.78800, -9.168446), "110785", OurStop));
+        Assert.False(StopBoard.MightHaveLeft(new("42|2524", "110785", 0, "STOPPED_AT", 38.78970, -9.168446), "110785", OurStop));
+        Assert.False(StopBoard.MightHaveLeft(new("42|2524", "110785", 0, "INCOMING_AT", 38.78800, -9.168446), "110785", OurStop));
+        Assert.False(StopBoard.MightHaveLeft(new("42|2524", "110999", 0, "STOPPED_AT", 38.78800, -9.168446), "110785", OurStop));
+    }
+
     private static Dictionary<string, RunningBus> Fleet(string atStopId, long reportedAt) =>
         new() { ["2753_0_1|1|3|1835"] = new("42|2524", atStopId, reportedAt) };
 

@@ -22,6 +22,12 @@ public sealed class TmlStop
 
     [JsonPropertyName("pattern_ids")]
     public List<string> PatternIds { get; set; } = [];
+
+    [JsonPropertyName("latitude")]
+    public double? Latitude { get; set; }
+
+    [JsonPropertyName("longitude")]
+    public double? Longitude { get; set; }
 }
 
 public interface ITmlNetwork
@@ -99,6 +105,7 @@ public sealed class TmlNetworkClient(HttpClient http) : ITmlNetwork
         });
 
         services.AddSingleton<PatternCatalogue>();
+        services.AddSingleton<ShapeCatalogue>();
         services.AddScoped<StopBoardService>();
 
         return services;

@@ -13,6 +13,8 @@ public sealed class PatternCatalogue(
     private IReadOnlyDictionary<string, IReadOnlyList<string>> stops =
         new Dictionary<string, IReadOnlyList<string>>();
 
+    private IReadOnlyDictionary<string, Place> places = new Dictionary<string, Place>();
+
     private DateTimeOffset stopsLoadedAt = DateTimeOffset.MinValue;
 
     public async Task<string?> NetworkStopIdAsync(string stopId, CancellationToken cancellationToken)
@@ -32,6 +34,13 @@ public sealed class PatternCatalogue(
         await EnsureStopsAsync(cancellationToken);
 
         return stops.TryGetValue(stopId, out var ids) ? ids : [];
+    }
+
+    public async Task<Place?> PlaceOfAsync(string stopId, CancellationToken cancellationToken)
+    {
+        await EnsureStopsAsync(cancellationToken);
+
+        return places.TryGetValue(stopId, out var place) ? place : null;
     }
 
     public async Task<IReadOnlyList<TmlPattern>> PatternAsync(
@@ -65,6 +74,12 @@ public sealed class PatternCatalogue(
             stops = loaded.ToDictionary(
                 stop => stop.Id.ToString(CultureInfo.InvariantCulture),
                 stop => (IReadOnlyList<string>)stop.PatternIds);
+
+            places = loaded
+                .Where(stop => stop.Latitude is not null && stop.Longitude is not null)
+                .ToDictionary(
+                    stop => stop.Id.ToString(CultureInfo.InvariantCulture),
+                    stop => new Place(stop.Latitude!.Value, stop.Longitude!.Value));
 
             stopsLoadedAt = clock.GetUtcNow();
         }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -9,7 +10,7 @@ using Polly.Retry;
 
 namespace BusLisbon.Api.Carris;
 
-public sealed class CarrisClient(HttpClient http) : ICarrisClient, ICarrisArrivals
+public sealed class CarrisClient(HttpClient http) : ICarrisClient, ICarrisArrivals, ICarrisRoutes
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -33,12 +34,43 @@ public sealed class CarrisClient(HttpClient http) : ICarrisClient, ICarrisArriva
         return arrivals ?? throw new CarrisFeedException($"The arrivals feed for stop {stopId} returned no array");
     }
 
+    public async Task<CarrisRoute?> GetRouteAsync(string patternId, CancellationToken cancellationToken)
+    {
+        var response = await http.GetAsync($"/patterns/{Uri.EscapeDataString(patternId)}", cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+
+        response.EnsureSuccessStatusCode();
+
+        var pattern = await response.Content.ReadFromJsonAsync<CarrisPattern>(SerializerOptions, cancellationToken);
+
+        if (pattern?.ShapeId is not { Length: > 0 } shapeId) return null;
+
+        var shape = await http.GetFromJsonAsync<CarrisShape>(
+            $"/shapes/{Uri.EscapeDataString(shapeId)}", SerializerOptions, cancellationToken);
+        var points = shape?.GeoJson?.Geometry?.Coordinates
+            .Where(pair => pair.Count >= 2)
+            .Select(pair => new Schedules.Place(pair[1], pair[0]))
+            .ToList() ?? [];
+        var stops = pattern.Path.Select(entry => PlaceOf(entry.Stop)).OfType<Schedules.Place>().ToList();
+
+        return points.Count > 1 ? new CarrisRoute(points, stops) : null;
+    }
+
+    private static Schedules.Place? PlaceOf(CarrisPathStop? stop) =>
+        double.TryParse(stop?.Lat, NumberStyles.Float, CultureInfo.InvariantCulture, out var lat)
+        && double.TryParse(stop?.Lon, NumberStyles.Float, CultureInfo.InvariantCulture, out var lon)
+        && !(lat == 0 && lon == 0)
+            ? new Schedules.Place(lat, lon)
+            : null;
+
     public static IServiceCollection AddCarrisClient(IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<CarrisOptions>(configuration.GetSection(CarrisOptions.SectionName));
 
         Configure(services.AddHttpClient<ICarrisClient, CarrisClient>(Connect));
         Configure(services.AddHttpClient<ICarrisArrivals, CarrisClient>(Connect));
+        Configure(services.AddHttpClient<ICarrisRoutes, CarrisClient>(Connect));
 
         return services;
     }

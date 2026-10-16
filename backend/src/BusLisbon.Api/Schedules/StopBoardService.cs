@@ -7,6 +7,7 @@ public sealed class StopBoardService(
     PatternCatalogue catalogue,
     ITmlArrivals arrivals,
     VehicleGateway fleet,
+    ShapeCatalogue shapes,
     IOptions<TmlOptions> options,
     TimeProvider clock)
 {
@@ -41,7 +42,37 @@ public sealed class StopBoardService(
             .ToList();
 
         var fleetByTrip = await fleet.GetVehiclesByTripAsync(cancellationToken);
+        var place = await catalogue.PlaceOfAsync(networkStopId, cancellationToken);
+        var leftOurStop = await LeftOurStopAsync(timetable, fleetByTrip, networkStopId, place, cancellationToken);
 
-        return StopBoard.Build(timetable, etas, now, BehindWindow, AheadWindow, fleetByTrip);
+        return StopBoard.Build(timetable, etas, now, BehindWindow, AheadWindow, fleetByTrip, leftOurStop);
+    }
+
+    private async Task<IReadOnlySet<string>> LeftOurStopAsync(
+        IReadOnlyList<ScheduledCall> timetable,
+        IReadOnlyDictionary<string, RunningBus> fleetByTrip,
+        string stopId,
+        Place? place,
+        CancellationToken cancellationToken)
+    {
+        var left = new HashSet<string>();
+
+        if (place is null) return left;
+
+        foreach (var call in timetable)
+        {
+            var bus = StopBoard.ClosestToTheSchedule(call, fleetByTrip)?.Bus;
+
+            if (bus is null || left.Contains(bus.VehicleId) || !StopBoard.MightHaveLeft(bus, stopId, place)) continue;
+
+            var shape = await shapes.ForPatternAsync(call.PatternId, cancellationToken);
+
+            if (shape is not null && shape.HasLeft(place, new Place(bus.Lat!.Value, bus.Lon!.Value)))
+            {
+                left.Add(bus.VehicleId);
+            }
+        }
+
+        return left;
     }
 }

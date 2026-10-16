@@ -14,6 +14,8 @@ public sealed record BoardEntry(
     bool TripRunning,
     bool FromTheBus = false);
 
+public sealed record Place(double Lat, double Lon);
+
 public sealed record LiveEta(string TripId, string PatternId, string VehicleId, long EstimatedUnix);
 
 public sealed record ReckonedArrival(
@@ -27,7 +29,8 @@ public static class StopBoard
         long nowUnix,
         TimeSpan behind,
         TimeSpan ahead,
-        IReadOnlyDictionary<string, Vehicles.RunningBus>? fleetByTrip = null)
+        IReadOnlyDictionary<string, Vehicles.RunningBus>? fleetByTrip = null,
+        IReadOnlySet<string>? leftOurStop = null)
     {
         var byTrip = new Dictionary<string, LiveEta>();
 
@@ -45,7 +48,7 @@ public static class StopBoard
             var published = Matching(byTrip, call.TripKeys);
             var running = OnTheRoad(fleetByTrip, call.TripKeys);
             var reckoned = ClosestToTheSchedule(call, fleetByTrip);
-            var stillComing = HasNotGoneBy(call, reckoned?.Bus);
+            var stillComing = HasNotGoneBy(call, reckoned?.Bus, leftOurStop);
             var eta = published is not null
                 && Within(published.EstimatedUnix, nowUnix, behind, ahead)
                 && NearItsDeparture(published.EstimatedUnix, call.ScheduledUnix)
@@ -148,13 +151,37 @@ public static class StopBoard
         return bus.ReportedAtUnix + (arrives - left);
     }
 
-    public static bool HasNotGoneBy(ScheduledCall call, Vehicles.RunningBus? bus)
+    public const double MightHaveLeftMetres = 60;
+
+    public static bool HasNotGoneBy(
+        ScheduledCall call, Vehicles.RunningBus? bus, IReadOnlySet<string>? leftOurStop = null)
     {
         if (bus?.AtStopId is not { } atStopId) return false;
 
         var at = call.Schedule.FirstOrDefault(stop => stop.StopId == atStopId);
 
-        return at is not null && at.StopSequence <= call.StopSequence;
+        if (at is null || at.StopSequence > call.StopSequence) return false;
+
+        return !(at.StopSequence == call.StopSequence && leftOurStop?.Contains(bus.VehicleId) == true);
+    }
+
+    public static bool MightHaveLeft(Vehicles.RunningBus bus, string stopId, Place stopPlace) =>
+        bus.Status == "STOPPED_AT"
+        && bus.AtStopId == stopId
+        && bus.Lat is { } lat
+        && bus.Lon is { } lon
+        && Metres(lat, lon, stopPlace.Lat, stopPlace.Lon) > MightHaveLeftMetres;
+
+    public static double Metres(double fromLat, double fromLon, double toLat, double toLon)
+    {
+        const double earthRadius = 6_371_000;
+        var dLat = (toLat - fromLat) * Math.PI / 180;
+        var dLon = (toLon - fromLon) * Math.PI / 180;
+        var h = Math.Sin(dLat / 2) * Math.Sin(dLat / 2)
+            + Math.Cos(fromLat * Math.PI / 180) * Math.Cos(toLat * Math.PI / 180)
+            * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+
+        return 2 * earthRadius * Math.Asin(Math.Min(1, Math.Sqrt(h)));
     }
 
     private static LiveEta? Matching(

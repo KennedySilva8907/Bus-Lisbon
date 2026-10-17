@@ -1,0 +1,91 @@
+name: Ranking freshness
+
+on:
+  schedule:
+    - cron: '41 10 * * *'
+  workflow_dispatch:
+    inputs:
+      stale_hours:
+        description: Hours after which the ranking counts as stale
+        type: number
+        default: 30
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      API: https://ca-buslisbon-api.politeglacier-dcb5b974.spaincentral.azurecontainerapps.io
+      STALE_HOURS: ${{ inputs.stale_hours || 30 }}
+    steps:
+      - name: Read when the ranking was last computed
+        id: age
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sf --max-time 90 --retry 3 --retry-delay 20 "$API/api/lines/reliability" -o ranking.json
+          computed=$(jq '.computedAtUnix' ranking.json)
+          lines=$(jq '.lines | length' ranking.json)
+          now=$(date +%s)
+          hours=$(( (now - computed) / 3600 ))
+          echo "computed at $computed, $hours hours ago, $lines lines"
+          echo "hours=$hours" >> "$GITHUB_OUTPUT"
+          echo "lines=$lines" >> "$GITHUB_OUTPUT"
+          echo "computed=$computed" >> "$GITHUB_OUTPUT"
+
+      - name: Say the ranking has gone stale
+        if: fromJSON(steps.age.outputs.hours) >= fromJSON(env.STALE_HOURS)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = 'collection';
+            const title = 'The line ranking has stopped updating';
+            const hours = Number('${{ steps.age.outputs.hours }}');
+            const lines = Number('${{ steps.age.outputs.lines }}');
+            const computed = Number('${{ steps.age.outputs.computed }}');
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const when = computed > 0 ? new Date(computed * 1000).toISOString() : 'never';
+
+            const body = [
+              `The ranking was last computed ${hours} hours ago (${when}) and has ${lines} lines.`,
+              'The collection job writes once a day, so this means at least one daily write stored no passages or did not run.',
+              'Check the job logs for "Wrote 0 of" and for runs that see no buses standing at the sample stops.',
+              '',
+              `Run: ${runUrl}`,
+            ].join('\n');
+
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+            });
+
+            const already = open.find(issue => issue.title === title);
+
+            if (!already) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                labels: [label],
+                assignees: ['KennedySilva8907'],
+                body,
+              });
+
+              return;
+            }
+
+            const quiet = Date.now() - new Date(already.updated_at).getTime() > 20 * 60 * 60 * 1000;
+
+            if (!quiet) return;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: already.number,
+              body: `Still stale.\n\n${body}`,
+            });

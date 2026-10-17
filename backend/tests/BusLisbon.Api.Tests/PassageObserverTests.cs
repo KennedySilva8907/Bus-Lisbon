@@ -67,6 +67,26 @@ public class PassageObserverTests
     }
 
     [Fact]
+    public void FindsThePatternWhenTheFeedSendsItWithAgencyPrefixes()
+    {
+        var pattern = PassageObserver.PatternFor(["[LA77N]1721_0_1", "[LA77N]1721_0_2"], "[KMMRZ][LA77N]1721_0_2");
+
+        Assert.Equal("[LA77N]1721_0_2", pattern);
+    }
+
+    [Fact]
+    public void StillFindsThePatternWhenTheFeedSendsItBare()
+    {
+        Assert.Equal("[LA77N]1721_0_2", PassageObserver.PatternFor(["[LA77N]1721_0_2"], "1721_0_2"));
+    }
+
+    [Fact]
+    public void DoesNotTakeAPatternThatOnlyEndsTheSame()
+    {
+        Assert.Null(PassageObserver.PatternFor(["[LA77N]11721_0_2"], "[KMMRZ][LA77N]1721_0_2"));
+    }
+
+    [Fact]
     public void SeesTheSameTripAtTwoDifferentStops()
     {
         var standing = PassageObserver.StandingAt(

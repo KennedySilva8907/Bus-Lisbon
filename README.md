@@ -6,6 +6,8 @@ Azure behind it, and it needs no account, no SMS and no money to use.
 
 **Live:** [buslisbon.vercel.app](https://buslisbon.vercel.app)
 
+**iPhone app:** there is also a native iOS version, written in Swift and SwiftUI: [Bus-Lisbon-iOS](https://github.com/KennedySilva8907/Bus-Lisbon-iOS).
+
 <p align="center">
   <img src="docs/screenshots/following-a-bus.png" width="270" alt="Following a bus towards a stop, with the arrivals list below">
   &nbsp;

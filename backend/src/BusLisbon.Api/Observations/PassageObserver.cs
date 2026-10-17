@@ -22,6 +22,13 @@ public sealed class PassageObserver(
     public static bool WorthKeeping(long observedUnix, long scheduledUnix) =>
         Math.Abs(observedUnix - scheduledUnix) <= (long)FarthestFromTheTimetable.TotalSeconds;
 
+    public static string? PatternFor(IReadOnlyList<string> networkPatternIds, string feedPatternId)
+    {
+        var wanted = VehicleMatcher.BareTripId(feedPatternId);
+
+        return networkPatternIds.FirstOrDefault(id => VehicleMatcher.BareTripId(id) == wanted);
+    }
+
     public static IReadOnlyList<StoppedBus> StandingAt(
         IReadOnlyList<Vehicle> fleet, IReadOnlySet<string> stopIds, long nowUnix)
     {
@@ -59,7 +66,7 @@ public sealed class PassageObserver(
             if (networkStopId is null) continue;
 
             var patternIds = await catalogue.PatternIdsForAsync(networkStopId, cancellationToken);
-            var patternId = patternIds.FirstOrDefault(id => id.EndsWith($"]{bus.PatternId}", StringComparison.Ordinal));
+            var patternId = PatternFor(patternIds, bus.PatternId);
 
             if (patternId is null) continue;
 
@@ -77,7 +84,7 @@ public sealed class PassageObserver(
             {
                 LineId = bus.LineId,
                 StopId = bus.StopId,
-                PatternId = bus.PatternId,
+                PatternId = VehicleMatcher.BareTripId(bus.PatternId),
                 ServiceDate = today,
                 ScheduledUnix = scheduledUnix,
                 EstimatedUnix = null,

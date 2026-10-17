@@ -78,6 +78,13 @@ public static class ArrivalCollectionJob
                 "Wrote {Written} of {Held} passages held over {Batches} runs",
                 written, pending.Passages.Count, pending.Batches.Count);
 
+            if (written == 0)
+            {
+                logger.LogWarning("Wrote no passages, so the ranking published before stays as it is");
+
+                return 0;
+            }
+
             var lines = await scope.ServiceProvider
                 .GetRequiredService<LinePunctualityQuery>()
                 .RunAsync(CancellationToken.None);

@@ -2,7 +2,7 @@ name: Ranking freshness
 
 on:
   schedule:
-    - cron: '41 10 * * *'
+    - cron: '41 */6 * * *'
   workflow_dispatch:
     inputs:
       stale_hours:

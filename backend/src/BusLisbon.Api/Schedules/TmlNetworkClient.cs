@@ -48,7 +48,7 @@ public sealed class TmlNetworkClient(HttpClient http) : ITmlNetwork
     public async Task<IReadOnlyList<TmlStop>> GetStopsAsync(CancellationToken cancellationToken)
     {
         var envelope = await http.GetFromJsonAsync<TmlEnvelope<List<TmlStop>>>(
-            "/hub/api/v1/network/stops", SerializerOptions, cancellationToken);
+            "/hub/api/v1/LA3SO/network/stops", SerializerOptions, cancellationToken);
 
         return envelope?.Data ?? throw new TmlFeedException("The stops feed returned no array");
     }
@@ -57,7 +57,7 @@ public sealed class TmlNetworkClient(HttpClient http) : ITmlNetwork
         string patternId, CancellationToken cancellationToken)
     {
         var response = await http.GetAsync(
-            $"/hub/api/v1/network/patterns/{Uri.EscapeDataString(patternId)}", cancellationToken);
+            $"/hub/api/v1/LA3SO/network/patterns/{Uri.EscapeDataString(patternId)}", cancellationToken);
 
         if (response.StatusCode == HttpStatusCode.NotFound) return [];
 

@@ -53,7 +53,7 @@ public class TmlArrivalsTests : IDisposable
     public async Task KeepsTheTimeTheFeedGivesRatherThanCountingFromNow()
     {
         _feed
-            .Given(Request.Create().WithPath("/hub/api/v1/realtime/eta/by-stop/*").UsingGet())
+            .Given(Request.Create().WithPath("/hub/api/v1/LA3SO/eta/by-stop/*").UsingGet())
             .RespondWith(Response.Create().WithStatusCode(200)
                 .WithHeader("Content-Type", "application/json").WithBody(OneLiveOneDead));
 
@@ -67,7 +67,7 @@ public class TmlArrivalsTests : IDisposable
     public async Task LeavesADeadRowInThePastInsteadOfBringingItToNow()
     {
         _feed
-            .Given(Request.Create().WithPath("/hub/api/v1/realtime/eta/by-stop/*").UsingGet())
+            .Given(Request.Create().WithPath("/hub/api/v1/LA3SO/eta/by-stop/*").UsingGet())
             .RespondWith(Response.Create().WithStatusCode(200)
                 .WithHeader("Content-Type", "application/json").WithBody(OneLiveOneDead));
 
@@ -82,7 +82,7 @@ public class TmlArrivalsTests : IDisposable
     public async Task ReadsNoArrivalsFromAnAnswerWithNoContent()
     {
         _feed
-            .Given(Request.Create().WithPath("/hub/api/v1/realtime/eta/by-stop/*").UsingGet())
+            .Given(Request.Create().WithPath("/hub/api/v1/LA3SO/eta/by-stop/*").UsingGet())
             .RespondWith(Response.Create().WithStatusCode(204));
 
         Assert.Empty(await BuildClient().GetApproachingAsync("110785", CancellationToken.None));
@@ -92,7 +92,7 @@ public class TmlArrivalsTests : IDisposable
     public async Task ReadsNoArrivalsFromAnEmptyBody()
     {
         _feed
-            .Given(Request.Create().WithPath("/hub/api/v1/realtime/eta/by-stop/*").UsingGet())
+            .Given(Request.Create().WithPath("/hub/api/v1/LA3SO/eta/by-stop/*").UsingGet())
             .RespondWith(Response.Create().WithStatusCode(200)
                 .WithHeader("Content-Type", "application/json").WithBody(string.Empty));
 

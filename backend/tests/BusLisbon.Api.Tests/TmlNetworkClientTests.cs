@@ -42,7 +42,7 @@ public class TmlNetworkClientTests : IDisposable
     public async Task ReadsEveryPlanThePatternComesWith()
     {
         _network
-            .Given(Request.Create().WithPath("/hub/api/v1/network/patterns/*").UsingGet())
+            .Given(Request.Create().WithPath("/hub/api/v1/LA3SO/network/patterns/*").UsingGet())
             .RespondWith(Response.Create().WithStatusCode(200)
                 .WithHeader("Content-Type", "application/json").WithBody(TwoPlans));
 
@@ -56,7 +56,7 @@ public class TmlNetworkClientTests : IDisposable
     public async Task FindsTodayInThePlanThatIsNotTheFirst()
     {
         _network
-            .Given(Request.Create().WithPath("/hub/api/v1/network/patterns/*").UsingGet())
+            .Given(Request.Create().WithPath("/hub/api/v1/LA3SO/network/patterns/*").UsingGet())
             .RespondWith(Response.Create().WithStatusCode(200)
                 .WithHeader("Content-Type", "application/json").WithBody(TwoPlans));
 
@@ -75,7 +75,7 @@ public class TmlNetworkClientTests : IDisposable
     public async Task GivesNoPlansForAPatternThatIsGone()
     {
         _network
-            .Given(Request.Create().WithPath("/hub/api/v1/network/patterns/*").UsingGet())
+            .Given(Request.Create().WithPath("/hub/api/v1/LA3SO/network/patterns/*").UsingGet())
             .RespondWith(Response.Create().WithStatusCode((int)HttpStatusCode.NotFound));
 
         Assert.Empty(await BuildClient().GetPatternAsync("[X]1_0_1", CancellationToken.None));
@@ -93,7 +93,7 @@ public class TmlNetworkClientTests : IDisposable
     public async Task ReadsAServiceDaySentAsANumber()
     {
         _network
-            .Given(Request.Create().WithPath("/hub/api/v1/network/patterns/*").UsingGet())
+            .Given(Request.Create().WithPath("/hub/api/v1/LA3SO/network/patterns/*").UsingGet())
             .RespondWith(Response.Create().WithStatusCode(200)
                 .WithHeader("Content-Type", "application/json").WithBody(ServiceDaysAsNumbers));
 

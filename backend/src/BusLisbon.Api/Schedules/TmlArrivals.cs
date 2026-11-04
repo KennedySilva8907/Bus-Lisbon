@@ -65,7 +65,7 @@ public sealed partial class TmlArrivalsClient(HttpClient http) : ITmlArrivals
         string stopId, CancellationToken cancellationToken)
     {
         using var answer = await http.GetAsync(
-            $"/hub/api/v1/realtime/eta/by-stop/{Uri.EscapeDataString(stopId)}", cancellationToken);
+            $"/hub/api/v1/LA3SO/eta/by-stop/{Uri.EscapeDataString(stopId)}", cancellationToken);
 
         answer.EnsureSuccessStatusCode();
 

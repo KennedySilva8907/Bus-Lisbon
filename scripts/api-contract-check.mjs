@@ -17,7 +17,7 @@ import { readFile } from 'node:fs/promises';
 
 const STOP_ID_MAP = new URL('../backend/src/BusLisbon.Api/Schedules/stop-id-map.json', import.meta.url);
 const BASE = 'https://api.carrismetropolitana.pt';
-const HUB = 'https://go.tmlmobilidade.pt/hub/api/v1';
+const HUB = 'https://go.tmlmobilidade.pt/hub/api/v1/LA3SO';
 const FRESH_WINDOW_SEC = 180;
 const ARRIVAL_SAMPLE = 12;
 
@@ -267,7 +267,7 @@ async function checkLiveEtas() {
 
   for (const stopId of sample) {
     try {
-      const data = dataOf(await getJson(`/realtime/eta/by-stop/${stopId}`, HUB));
+      const data = dataOf(await getJson(`/eta/by-stop/${stopId}`, HUB));
       if (!Array.isArray(data)) {
         fail(name, `stop ${stopId} did not answer with a list`);
         return;
@@ -333,7 +333,7 @@ async function checkPositionsReadiness() {
 
   try {
     now = await getJson('/v2/vehicles');
-    next = dataOf(await getJson('/realtime/vehicles/positions', HUB));
+    next = dataOf(await getJson('/vehicles/positions', HUB));
   } catch {
     return;
   }

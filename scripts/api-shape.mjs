@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
 const BASE = 'https://api.carrismetropolitana.pt';
-const HUB = 'https://go.tmlmobilidade.pt/hub/api/v1';
+const HUB = 'https://go.tmlmobilidade.pt/hub/api/v1/LA3SO';
 const SHAPE_FILE = new URL('./api-shape.json', import.meta.url);
 
 const SAMPLE = 40;
@@ -88,7 +88,7 @@ async function readShapes({ skipHeavy = false } = {}) {
   const shapes = {};
 
   const vehicles = dataOf(await getJson(`${BASE}/v2/vehicles`));
-  const positions = dataOf(await getJson(`${HUB}/realtime/vehicles/positions`));
+  const positions = dataOf(await getJson(`${HUB}/vehicles/positions`));
 
   if (!skipHeavy) {
     shapes['carris /stops'] = shapeOf(dataOf(await getJson(`${BASE}/stops`)));
@@ -104,7 +104,7 @@ async function readShapes({ skipHeavy = false } = {}) {
   const etas = [];
 
   for (const stopId of PROBE_STOPS) {
-    etas.push(...dataOf(await getJson(`${HUB}/realtime/eta/by-stop/${stopId}`)));
+    etas.push(...dataOf(await getJson(`${HUB}/eta/by-stop/${stopId}`)));
   }
 
   shapes['carris /v2/vehicles'] = shapeOf(vehicles.filter(bus => bus.lat));

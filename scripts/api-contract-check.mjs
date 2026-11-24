@@ -14,6 +14,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
+import { fetchWithRetry } from './fetch-retry.mjs';
 
 const STOP_ID_MAP = new URL('../backend/src/BusLisbon.Api/Schedules/stop-id-map.json', import.meta.url);
 const BASE = 'https://api.carrismetropolitana.pt';
@@ -55,7 +56,7 @@ async function getJson(path, base = BASE) {
   let lastStatus = 0;
 
   for (let attempt = 1; attempt <= UPSTREAM_ATTEMPTS; attempt++) {
-    const res = await fetch(`${base}${path}`, { headers: { accept: 'application/json' } });
+    const res = await fetchWithRetry(`${base}${path}`);
 
     if (res.ok) {
       const text = await res.text();

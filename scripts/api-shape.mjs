@@ -6,6 +6,9 @@ const SHAPE_FILE = new URL('./api-shape.json', import.meta.url);
 
 const SAMPLE = 40;
 const FOUND_CHANGES = 2;
+const FRESH_MS = 180_000;
+const SERVICE_IS_RUNNING_ABOVE = 200;
+const EMPTY_WHEN_NOTHING_RUNS = ['hub realtime/eta/by-stop/{id}'];
 
 export function readBody(text) {
   return text.trim().length === 0 ? null : JSON.parse(text);
@@ -39,6 +42,22 @@ export function typeOf(value) {
   if (Array.isArray(value)) return `array of ${insideOf(value)}`;
 
   return typeof value;
+}
+
+export function busesOnTheRoad(vehicles, nowMs) {
+  return vehicles.filter(bus => {
+    const stamp = Number(bus.timestamp);
+
+    if (!Number.isFinite(stamp)) return false;
+
+    const stampMs = stamp < 1e12 ? stamp * 1000 : stamp;
+
+    return Math.abs(nowMs - stampMs) <= FRESH_MS;
+  }).length;
+}
+
+export function serviceIsRunning(buses) {
+  return buses > SERVICE_IS_RUNNING_ABOVE;
 }
 
 export function spread(objects) {
@@ -116,10 +135,10 @@ async function readShapes({ skipHeavy = false } = {}) {
   shapes['hub realtime/vehicles/positions'] = shapeOf(positions);
   shapes['hub realtime/eta/by-stop/{id}'] = shapeOf(etas);
 
-  return shapes;
+  return { shapes, buses: busesOnTheRoad(vehicles, Date.now()) };
 }
 
-export function compare(recorded, live) {
+export function compare(recorded, live, { serviceRunning = true } = {}) {
   const changes = [];
 
   for (const endpoint of Object.keys(recorded)) {
@@ -127,6 +146,8 @@ export function compare(recorded, live) {
     const after = live[endpoint];
 
     if (!after || Object.keys(after.always).length + Object.keys(after.sometimes).length === 0) {
+      if (!serviceRunning && EMPTY_WHEN_NOTHING_RUNS.includes(endpoint)) continue;
+
       changes.push({ endpoint, kind: 'silent', detail: 'answered with nothing to read' });
       continue;
     }
@@ -160,7 +181,7 @@ export function compare(recorded, live) {
 
 async function main() {
   const skipHeavy = process.argv.includes('--light');
-  const live = await readShapes({ skipHeavy });
+  const { shapes: live, buses } = await readShapes({ skipHeavy });
 
   if (process.argv.includes('--record')) {
     await writeFile(SHAPE_FILE, JSON.stringify(live, null, 2) + '\n');
@@ -173,10 +194,12 @@ async function main() {
   const recorded = skipHeavy
     ? Object.fromEntries(Object.entries(all).filter(([endpoint]) => !HEAVY.includes(endpoint)))
     : all;
-  const changes = compare(recorded, live);
+  const serviceRunning = serviceIsRunning(buses);
+  const changes = compare(recorded, live, { serviceRunning });
 
   console.log('Carris API shape check —', new Date().toISOString());
   console.log('='.repeat(60));
+  console.log(`${buses} buses on the road${serviceRunning ? '' : ', so an empty ETA list is expected'}`);
 
   if (changes.length === 0) {
     console.log(`\n✓ ${Object.keys(recorded).length} endpoints still look the way they were recorded.`);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compare, dataOf, insideOf, readBody, spread, typeOf } from './api-shape.mjs';
+import { busesOnTheRoad, compare, dataOf, insideOf, readBody, serviceIsRunning, spread, typeOf } from './api-shape.mjs';
 
 describe('what a field looks like', () => {
   it('says what an array is made of, so a list of dates changing type shows up', () => {
@@ -109,6 +109,26 @@ describe('compare', () => {
     ]);
   });
 
+  it('lets the ETA feed be empty when no bus is running', () => {
+    expect(compare(recorded, live({}, {}), { serviceRunning: false })).toEqual([]);
+  });
+
+  it('still calls an empty ETA feed silent while buses are running', () => {
+    expect(compare(recorded, live({}, {}), { serviceRunning: true })).toEqual([
+      { endpoint: 'hub realtime/eta/by-stop/{id}', kind: 'silent', detail: 'answered with nothing to read' },
+    ]);
+  });
+
+  it('does not excuse any other empty endpoint at night', () => {
+    const night = compare(
+      { 'hub realtime/vehicles/positions': { always: { id: 'string' }, sometimes: {} } },
+      { 'hub realtime/vehicles/positions': { always: {}, sometimes: {} } },
+      { serviceRunning: false },
+    );
+
+    expect(night.map(change => change.kind)).toEqual(['silent']);
+  });
+
   it('notices an endpoint nobody recorded yet', () => {
     const changes = compare(recorded, {
       ...live(everything, { position_created_at: 'string', refreshed_at: 'string' }),
@@ -151,5 +171,25 @@ describe('what the shape is built from', () => {
     ];
 
     expect(spread(fleet).some(row => 'bikes_allowed' in row)).toBe(true);
+  });
+});
+
+describe('whether the service is running', () => {
+  const now = 1_795_519_160_000;
+
+  it('counts buses that reported in the last three minutes, in either time unit', () => {
+    const buses = [
+      { timestamp: now - 10_000 },
+      { timestamp: (now - 60_000) / 1000 },
+      { timestamp: now - 600_000 },
+      { timestamp: null },
+    ];
+
+    expect(busesOnTheRoad(buses, now)).toBe(2);
+  });
+
+  it('calls a few dozen night buses quiet and a normal day running', () => {
+    expect(serviceIsRunning(40)).toBe(false);
+    expect(serviceIsRunning(700)).toBe(true);
   });
 });

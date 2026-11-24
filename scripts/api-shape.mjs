@@ -1,4 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { fetchWithRetry } from './fetch-retry.mjs';
 
 const BASE = 'https://api.carrismetropolitana.pt';
 const HUB = 'https://go.tmlmobilidade.pt/hub/api/v1/LA3SO';
@@ -16,7 +17,7 @@ export function dataOf(payload) {
 }
 
 async function getJson(url) {
-  const response = await fetch(url, { headers: { accept: 'application/json' } });
+  const response = await fetchWithRetry(url);
 
   if (!response.ok) {
     console.log(`  ${url} answered ${response.status}`);
